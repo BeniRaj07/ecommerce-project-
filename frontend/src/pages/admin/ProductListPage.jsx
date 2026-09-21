@@ -4,18 +4,29 @@ import API from '../../api';
 import { toast } from 'react-toastify';
 import Loader from '../../components/Loader';
 import AdminLayout from '../../components/AdminLayout';
+import { footwearCategories } from '../../data/categories';
 import { FaEdit, FaTrash, FaPlus } from 'react-icons/fa';
 
 const ProductListPage = () => {
-  const [products, setProducts] = useState([]); 
+  const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [categoryFilter, setCategoryFilter] = useState('');
+  const [subFilter, setSubFilter] = useState('');
   const navigate = useNavigate();
+
+  const subOptions = footwearCategories.find((c) => c.name === categoryFilter)?.subCategories || [];
 
   useEffect(() => {
     const fetchProducts = async () => {
+      setLoading(true);
       try {
         // Public endpoint, no token needed for getting all products
-        const { data } = await API.get('/api/products');
+        const { data } = await API.get('/api/products', {
+          params: {
+            ...(categoryFilter ? { category: categoryFilter } : {}),
+            ...(subFilter ? { sub: subFilter } : {}),
+          },
+        });
         setProducts(data);
       } catch (error) {
         toast.error(error?.response?.data?.message || error.message);
@@ -24,7 +35,12 @@ const ProductListPage = () => {
       }
     };
     fetchProducts();
-  }, []);
+  }, [categoryFilter, subFilter]);
+
+  const categoryChangeHandler = (value) => {
+    setCategoryFilter(value);
+    setSubFilter('');
+  };
 
   const deleteHandler = async (id) => {
     if (window.confirm('Are you sure you want to delete this product?')) {
@@ -57,6 +73,37 @@ const ProductListPage = () => {
 
   return (
     <AdminLayout title="Products" actions={createButton}>
+      <div className="flex flex-wrap items-center gap-3 mb-4">
+        <select
+          value={categoryFilter}
+          onChange={(e) => categoryChangeHandler(e.target.value)}
+          className="border border-slate-200 rounded-lg py-2 px-3 text-sm bg-white outline-none focus:ring-2 focus:ring-brand-500"
+        >
+          <option value="">All Categories</option>
+          {footwearCategories.map((c) => (
+            <option key={c.name} value={c.name}>{c.name}</option>
+          ))}
+        </select>
+        <select
+          value={subFilter}
+          onChange={(e) => setSubFilter(e.target.value)}
+          disabled={!categoryFilter}
+          className="border border-slate-200 rounded-lg py-2 px-3 text-sm bg-white outline-none focus:ring-2 focus:ring-brand-500 disabled:bg-slate-50 disabled:text-slate-400"
+        >
+          <option value="">All Sub-Categories</option>
+          {subOptions.map((sub) => (
+            <option key={sub} value={sub}>{sub}</option>
+          ))}
+        </select>
+        {(categoryFilter || subFilter) && (
+          <button
+            onClick={() => categoryChangeHandler('')}
+            className="text-sm font-semibold text-brand-600 hover:text-brand-800"
+          >
+            Clear filters
+          </button>
+        )}
+      </div>
       <div className="bg-white rounded-2xl shadow-soft overflow-hidden">
         {loading ? (
           <div className="py-12"><Loader /></div>
@@ -74,6 +121,11 @@ const ProductListPage = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
+                {products.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="py-10 px-4 text-center text-slate-500">No products match this filter.</td>
+                  </tr>
+                )}
                 {products.map((product) => (
                   <tr key={product._id} className="hover:bg-slate-50">
                     <td className="py-3 px-4">

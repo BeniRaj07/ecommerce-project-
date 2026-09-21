@@ -29,9 +29,11 @@ const Header = () => {
                 <span className="text-xl font-extrabold tracking-tight text-slate-900">Juttax</span>
               </Link>
             </div>
-            <div className="flex-1 max-w-lg">
-              <SearchBox />
-            </div>
+            {!userInfo?.isAdmin && (
+              <div className="flex-1 max-w-lg">
+                <SearchBox />
+              </div>
+            )}
             <div className="flex items-center flex-shrink-0">
               <nav className="flex items-center">
                 {userInfo ? (
@@ -42,15 +44,6 @@ const Header = () => {
                     </button>
                     {isMenuOpen && (
                       <div className="absolute right-0 mt-3 w-52 bg-white rounded-xl shadow-card py-1.5 z-10 text-slate-700 border border-slate-100">
-                        {userInfo.isAdmin && (
-                          <>
-                            <Link to="/admin/dashboard" onClick={() => setIsMenuOpen(false)} className="block px-4 py-2 text-sm hover:bg-slate-50 rounded-lg mx-1.5">Dashboard</Link>
-                            <Link to="/admin/productlist" onClick={() => setIsMenuOpen(false)} className="block px-4 py-2 text-sm hover:bg-slate-50 rounded-lg mx-1.5">Products</Link>
-                            <Link to="/admin/orderlist" onClick={() => setIsMenuOpen(false)} className="block px-4 py-2 text-sm hover:bg-slate-50 rounded-lg mx-1.5">Orders</Link>
-                            <Link to="/admin/userlist" onClick={() => setIsMenuOpen(false)} className="block px-4 py-2 text-sm hover:bg-slate-50 rounded-lg mx-1.5">Users</Link>
-                            <hr className="my-1.5 border-slate-100" />
-                          </>
-                        )}
                         <Link to="/profile" onClick={() => setIsMenuOpen(false)} className="block px-4 py-2 text-sm hover:bg-slate-50 rounded-lg mx-1.5">Profile</Link>
                         <button onClick={logoutHandler} className="block w-full text-left px-4 py-2 text-sm hover:bg-slate-50 rounded-lg mx-1.5">Logout</button>
                       </div>
