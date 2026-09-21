@@ -36,8 +36,12 @@ const PlaceOrderPage = () => {
         totalPrice: totalPrice.toFixed(2),
       });
 
-
-      dispatch(clearCartItems());
+      // COD has no separate payment step, so the order being created IS the
+      // successful-checkout moment. Online methods (eSewa/Stripe) only clear
+      // the cart once OrderPage confirms the payment actually succeeded.
+      if (cart.paymentMethod === 'COD') {
+        dispatch(clearCartItems());
+      }
       navigate(`/order/${res.data._id}`);
     } catch (error) {
       toast.error(error?.response?.data?.message || error.message);

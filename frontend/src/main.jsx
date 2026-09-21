@@ -23,6 +23,7 @@ import ShippingPage from './pages/ShippingPage.jsx';
 import PaymentPage from './pages/PaymentPage.jsx';
 import PlaceOrderPage from './pages/PlaceOrderPage.jsx';
 import OrderPage from './pages/OrderPage.jsx';
+import OrdersListPage from './pages/OrdersListPage.jsx';
 import ProfilePage from './pages/ProfilePage.jsx';
 import UserListPage from './pages/admin/UserListPage.jsx';
 import ProductListPage from './pages/admin/ProductListPage.jsx'; 
@@ -51,6 +52,7 @@ const router = createBrowserRouter(
         <Route path="/shipping" element={<ShippingPage />} />
         <Route path="/payment" element={<PaymentPage />} />
         <Route path="/placeorder" element={<PlaceOrderPage />} />
+        <Route path="/orders" element={<OrdersListPage />} />
         <Route path="/order/:id" element={<OrderPage />} />
         <Route path="/order/:id/esewa/:esewaStatus" element={<OrderPage />} />
         <Route path="/profile" element={<ProfilePage />} />

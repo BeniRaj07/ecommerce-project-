@@ -90,7 +90,10 @@ const ProfilePage = () => {
 
       {/* My Orders Section */}
       <div className="md:col-span-2">
-        <h2 className="text-xl font-bold mb-4 text-slate-900">My Orders</h2>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl font-bold text-slate-900">My Orders</h2>
+          <Link to="/orders" className="text-sm font-semibold text-brand-600 hover:text-brand-800">View all orders</Link>
+        </div>
         {loadingOrders ? (
           <Loader />
         ) : orders.length === 0 ? (

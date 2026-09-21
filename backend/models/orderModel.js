@@ -18,6 +18,9 @@ const orderSchema = new mongoose.Schema(
           required: true,
           ref: 'Product', // This creates a relationship to the Product model
         },
+        selectedSize: { type: mongoose.Schema.Types.Mixed },
+        selectedColor: { type: String },
+        reviewed: { type: Boolean, default: false },
       },
     ],
     shippingAddress: {
@@ -71,9 +74,53 @@ const orderSchema = new mongoose.Schema(
     deliveredAt: {
       type: Date,
     },
+
+    // Fulfillment lifecycle. isPaid/isDelivered above stay in sync with this
+    // (kept as-is since existing code — stats, review gating, order page —
+    // already reads them) rather than being replaced by it.
+    orderStatus: {
+      type: String,
+      enum: [
+        'pending',
+        'to_ship',
+        'shipped',
+        'to_receive',
+        'delivered',
+        'cancel_requested',
+        'cancelled',
+        'return_requested',
+        'return_approved',
+        'returned',
+        'return_rejected',
+      ],
+      default: 'pending',
+    },
+    shippedAt: { type: Date },
+    cancelledAt: { type: Date },
+    returnedAt: { type: Date },
+
+    cancelRequest: {
+      requested: { type: Boolean, default: false },
+      reason: { type: String },
+      requestedAt: { type: Date },
+      approvedAt: { type: Date },
+      rejectedAt: { type: Date },
+      // Shipping status to restore if the admin rejects the request —
+      // cancellation is only requestable from 'pending' or 'to_ship'.
+      previousStatus: { type: String },
+    },
+
+    returnRequest: {
+      requested: { type: Boolean, default: false },
+      reason: { type: String },
+      details: { type: String },
+      requestedAt: { type: Date },
+      approvedAt: { type: Date },
+      rejectedAt: { type: Date },
+    },
   },
   {
-    timestamps: true, 
+    timestamps: true,
   }
 );
 

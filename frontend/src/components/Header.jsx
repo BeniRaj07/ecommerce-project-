@@ -44,6 +44,9 @@ const Header = () => {
                     </button>
                     {isMenuOpen && (
                       <div className="absolute right-0 mt-3 w-52 bg-white rounded-xl shadow-card py-1.5 z-10 text-slate-700 border border-slate-100">
+                        {!userInfo.isAdmin && (
+                          <Link to="/orders" onClick={() => setIsMenuOpen(false)} className="block px-4 py-2 text-sm hover:bg-slate-50 rounded-lg mx-1.5">My Orders</Link>
+                        )}
                         <Link to="/profile" onClick={() => setIsMenuOpen(false)} className="block px-4 py-2 text-sm hover:bg-slate-50 rounded-lg mx-1.5">Profile</Link>
                         <button onClick={logoutHandler} className="block w-full text-left px-4 py-2 text-sm hover:bg-slate-50 rounded-lg mx-1.5">Logout</button>
                       </div>

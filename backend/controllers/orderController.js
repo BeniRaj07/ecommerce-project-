@@ -96,7 +96,7 @@ const getMyOrders = async (req, res) => {
 // @route --->  GET /api/orders
 // @access  Private/Admin
 const getOrders = async (req, res) => {
-  const orders = await Order.find({}).populate('user', 'id name');
+  const orders = await Order.find({}).populate('user', 'id name email').sort({ createdAt: -1 });
   res.status(200).json(orders);
 };
 
@@ -110,12 +110,258 @@ const updateOrderToDelivered = async (req, res) => {
   if (order) {
     order.isDelivered = true;
     order.deliveredAt = Date.now();
+    order.orderStatus = 'delivered';
 
     const updatedOrder = await order.save();
     res.status(200).json(updatedOrder);
   } else {
     res.status(404).json({ message: 'Order not found' });
   }
+};
+
+// Admin-driven shipping stages. Each key only ever advances to its one
+// listed value — no skipping stages, and nothing here can move an order
+// out of a cancel/return status (they simply have no entry below).
+const SHIPPING_TRANSITIONS = {
+  pending: 'to_ship',
+  to_ship: 'shipped',
+  shipped: 'to_receive',
+  to_receive: 'delivered',
+};
+
+// @desc  --->  Advance an order's shipping status by exactly one stage
+// @route --->  PUT /api/orders/:id/status
+// @access  Private/Admin
+const updateOrderStatus = async (req, res) => {
+  const { status } = req.body;
+  const order = await Order.findById(req.params.id);
+
+  if (!order) {
+    res.status(404).json({ message: 'Order not found' });
+    return;
+  }
+
+  const nextStatus = SHIPPING_TRANSITIONS[order.orderStatus];
+  if (!nextStatus || nextStatus !== status) {
+    res.status(400).json({
+      message: nextStatus
+        ? `Invalid status transition. "${order.orderStatus}" can only move to "${nextStatus}".`
+        : `Order is "${order.orderStatus}" and cannot be moved through the shipping workflow.`,
+    });
+    return;
+  }
+
+  order.orderStatus = status;
+  if (status === 'shipped') order.shippedAt = Date.now();
+  if (status === 'delivered') {
+    order.isDelivered = true;
+    order.deliveredAt = Date.now();
+  }
+
+  const updatedOrder = await order.save();
+  res.json(updatedOrder);
+};
+
+// Cancellation is only requestable before the order ships.
+const CANCELLABLE_STATUSES = ['pending', 'to_ship'];
+
+// @desc  --->  User requests cancellation of their own not-yet-shipped order
+// @route --->  PUT /api/orders/:id/cancel-request
+// @access  Private
+const requestCancellation = async (req, res) => {
+  const { reason } = req.body;
+  const order = await Order.findById(req.params.id);
+
+  if (!order) {
+    res.status(404).json({ message: 'Order not found' });
+    return;
+  }
+
+  if (order.user.toString() !== req.user._id.toString()) {
+    res.status(403).json({ message: 'Not authorized to modify this order' });
+    return;
+  }
+
+  if (!CANCELLABLE_STATUSES.includes(order.orderStatus)) {
+    res.status(400).json({
+      message: 'This order can no longer be cancelled because it has already been shipped.',
+    });
+    return;
+  }
+
+  if (!reason) {
+    res.status(400).json({ message: 'A cancellation reason is required' });
+    return;
+  }
+
+  order.cancelRequest = {
+    requested: true,
+    reason,
+    requestedAt: Date.now(),
+    previousStatus: order.orderStatus,
+  };
+  order.orderStatus = 'cancel_requested';
+
+  const updatedOrder = await order.save();
+  res.json(updatedOrder);
+};
+
+// @desc  --->  Admin approves a pending cancellation request
+// @route --->  PUT /api/orders/:id/cancel/approve
+// @access  Private/Admin
+const approveCancellation = async (req, res) => {
+  const order = await Order.findById(req.params.id);
+
+  if (!order) {
+    res.status(404).json({ message: 'Order not found' });
+    return;
+  }
+
+  if (order.orderStatus !== 'cancel_requested') {
+    res.status(400).json({ message: 'This order has no pending cancellation request.' });
+    return;
+  }
+
+  order.orderStatus = 'cancelled';
+  order.cancelledAt = Date.now();
+  order.cancelRequest.approvedAt = Date.now();
+
+  const updatedOrder = await order.save();
+  res.json(updatedOrder);
+};
+
+// @desc  --->  Admin rejects a pending cancellation request, restoring the
+//              order's prior shipping status
+// @route --->  PUT /api/orders/:id/cancel/reject
+// @access  Private/Admin
+const rejectCancellation = async (req, res) => {
+  const order = await Order.findById(req.params.id);
+
+  if (!order) {
+    res.status(404).json({ message: 'Order not found' });
+    return;
+  }
+
+  if (order.orderStatus !== 'cancel_requested') {
+    res.status(400).json({ message: 'This order has no pending cancellation request.' });
+    return;
+  }
+
+  order.orderStatus = order.cancelRequest.previousStatus || 'pending';
+  order.cancelRequest.rejectedAt = Date.now();
+  order.cancelRequest.requested = false;
+
+  const updatedOrder = await order.save();
+  res.json(updatedOrder);
+};
+
+// @desc  --->  User requests a return on their own delivered order
+// @route --->  PUT /api/orders/:id/return-request
+// @access  Private
+const requestReturn = async (req, res) => {
+  const { reason, details } = req.body;
+  const order = await Order.findById(req.params.id);
+
+  if (!order) {
+    res.status(404).json({ message: 'Order not found' });
+    return;
+  }
+
+  if (order.user.toString() !== req.user._id.toString()) {
+    res.status(403).json({ message: 'Not authorized to modify this order' });
+    return;
+  }
+
+  if (order.orderStatus !== 'delivered') {
+    res.status(400).json({ message: 'Returns can only be requested for delivered orders.' });
+    return;
+  }
+
+  if (!reason) {
+    res.status(400).json({ message: 'A return reason is required' });
+    return;
+  }
+
+  order.returnRequest = {
+    requested: true,
+    reason,
+    details: details || '',
+    requestedAt: Date.now(),
+  };
+  order.orderStatus = 'return_requested';
+
+  const updatedOrder = await order.save();
+  res.json(updatedOrder);
+};
+
+// @desc  --->  Admin approves a pending return request
+// @route --->  PUT /api/orders/:id/return/approve
+// @access  Private/Admin
+const approveReturn = async (req, res) => {
+  const order = await Order.findById(req.params.id);
+
+  if (!order) {
+    res.status(404).json({ message: 'Order not found' });
+    return;
+  }
+
+  if (order.orderStatus !== 'return_requested') {
+    res.status(400).json({ message: 'This order has no pending return request.' });
+    return;
+  }
+
+  order.orderStatus = 'return_approved';
+  order.returnRequest.approvedAt = Date.now();
+
+  const updatedOrder = await order.save();
+  res.json(updatedOrder);
+};
+
+// @desc  --->  Admin rejects a pending return request
+// @route --->  PUT /api/orders/:id/return/reject
+// @access  Private/Admin
+const rejectReturn = async (req, res) => {
+  const order = await Order.findById(req.params.id);
+
+  if (!order) {
+    res.status(404).json({ message: 'Order not found' });
+    return;
+  }
+
+  if (order.orderStatus !== 'return_requested') {
+    res.status(400).json({ message: 'This order has no pending return request.' });
+    return;
+  }
+
+  order.orderStatus = 'return_rejected';
+  order.returnRequest.rejectedAt = Date.now();
+  order.returnRequest.requested = false;
+
+  const updatedOrder = await order.save();
+  res.json(updatedOrder);
+};
+
+// @desc  --->  Admin marks an approved return as physically completed
+// @route --->  PUT /api/orders/:id/return/complete
+// @access  Private/Admin
+const markReturned = async (req, res) => {
+  const order = await Order.findById(req.params.id);
+
+  if (!order) {
+    res.status(404).json({ message: 'Order not found' });
+    return;
+  }
+
+  if (order.orderStatus !== 'return_approved') {
+    res.status(400).json({ message: 'This order is not approved for return yet.' });
+    return;
+  }
+
+  order.orderStatus = 'returned';
+  order.returnedAt = Date.now();
+
+  const updatedOrder = await order.save();
+  res.json(updatedOrder);
 };
 
 // @desc  --->  Start an eSewa (sandbox) payment: sign the order total and
@@ -305,6 +551,14 @@ export {
   getMyOrders,
   getOrders,
   updateOrderToDelivered,
+  updateOrderStatus,
+  requestCancellation,
+  approveCancellation,
+  rejectCancellation,
+  requestReturn,
+  approveReturn,
+  rejectReturn,
+  markReturned,
   initiateEsewaPayment,
   verifyEsewaPayment,
   getOrderStats,

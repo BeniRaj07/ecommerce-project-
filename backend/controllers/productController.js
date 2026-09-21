@@ -146,52 +146,82 @@ const getTopProducts = async (req, res) => {
 };
 
 
-// @desc --->  Create new review
+// @desc --->  Create new review — tied to a specific delivered order, so a
+//             product bought (and delivered) more than once can be reviewed
+//             once per order
 // @route --->  POST /api/products/:id/reviews
 // @access  Private
 const createProductReview = async (req, res) => {
-  const { rating, comment } = req.body;
+  const { rating, comment, orderId } = req.body;
   const product = await Product.findById(req.params.id);
 
-  if (product) {
-    const alreadyReviewed = product.reviews.find(
-      (r) => r.user.toString() === req.user._id.toString()
+  if (!product) {
+    res.status(404).json({ message: 'Product not found' });
+    return;
+  }
+
+  if (!orderId) {
+    res.status(400).json({ message: 'orderId is required to review a product' });
+    return;
+  }
+
+  const order = await Order.findById(orderId);
+
+  if (!order) {
+    res.status(404).json({ message: 'Order not found' });
+    return;
+  }
+
+  if (order.user.toString() !== req.user._id.toString()) {
+    res.status(403).json({ message: 'Not authorized to review using this order' });
+    return;
+  }
+
+  if (order.orderStatus !== 'delivered') {
+    res.status(403).json({ message: 'You can only review a product after it has been delivered to you.' });
+    return;
+  }
+
+  const orderItem = order.orderItems.find(
+    (item) => item.product.toString() === product._id.toString()
+  );
+
+  if (!orderItem) {
+    res.status(400).json({ message: 'This product was not part of that order.' });
+    return;
+  }
+
+  const alreadyReviewed =
+    orderItem.reviewed ||
+    product.reviews.some(
+      (r) => r.user.toString() === req.user._id.toString() && r.order.toString() === orderId
     );
 
-    if (alreadyReviewed) {
-      res.status(400).json({ message: 'Product already reviewed' });
-      return;
-    }
-
-    const deliveredOrder = await Order.findOne({
-      user: req.user._id,
-      isDelivered: true,
-      'orderItems.product': product._id,
-    });
-
-    if (!deliveredOrder) {
-      res.status(403).json({ message: 'You can only review a product after it has been delivered to you.' });
-      return;
-    }
-
-    const review = {
-      name: req.user.name,
-      rating: Number(rating),
-      comment,
-      user: req.user._id,
-    };
-
-    product.reviews.push(review);
-    product.numReviews = product.reviews.length;
-    product.rating =
-      product.reviews.reduce((acc, item) => item.rating + acc, 0) /
-      product.reviews.length;
-
-    await product.save();
-    res.status(201).json({ message: 'Review added' });
-  } else {
-    res.status(404).json({ message: 'Product not found' });
+  if (alreadyReviewed) {
+    res.status(400).json({ message: 'This item has already been reviewed.' });
+    return;
   }
+
+  const review = {
+    name: req.user.name,
+    rating: Number(rating),
+    comment,
+    user: req.user._id,
+    order: order._id,
+  };
+
+  product.reviews.push(review);
+  product.numReviews = product.reviews.length;
+  product.rating =
+    product.reviews.reduce((acc, item) => item.rating + acc, 0) /
+    product.reviews.length;
+
+  await product.save();
+
+  orderItem.reviewed = true;
+  await order.save();
+
+  res.status(201).json({ message: 'Review added' });
 };
 
 // --- ADMIN FUNCTIONS ---
