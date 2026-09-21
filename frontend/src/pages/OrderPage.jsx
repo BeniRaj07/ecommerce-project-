@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import API from '../api';
@@ -8,6 +8,7 @@ import { Elements } from '@stripe/react-stripe-js';
 import CheckoutForm from '../components/CheckoutForm';
 import EsewaCheckout from '../components/EsewaCheckout';
 import { toast } from 'react-toastify';
+import { FaCheck } from 'react-icons/fa';
 
 
 const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY);
@@ -18,6 +19,8 @@ const OrderPage = () => {
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [justPaid, setJustPaid] = useState(false);
+  const verifiedRef = useRef(false);
 
   const { userInfo } = useSelector((state) => state.auth);
 
@@ -41,13 +44,16 @@ const OrderPage = () => {
   }, [orderId, userInfo]);
 
   useEffect(() => {
-    if (!esewaStatus || !userInfo) return;
+    // Wait for the initial order fetch to land first, so its response can
+    // never resolve after (and overwrite) the freshly-verified paid order.
+    if (!esewaStatus || !userInfo || !order || verifiedRef.current) return;
+    verifiedRef.current = true;
 
     if (esewaStatus === 'success') {
       API.post(`/api/orders/${orderId}/esewa/verify`)
         .then(({ data }) => {
           setOrder(data);
-          toast.success('Payment Successful!');
+          setJustPaid(true);
         })
         .catch((err) => {
           toast.error(err?.response?.data?.message || err.message);
@@ -59,7 +65,7 @@ const OrderPage = () => {
       toast.error('eSewa payment was not completed.');
       navigate(`/order/${orderId}`, { replace: true });
     }
-  }, [esewaStatus, orderId, userInfo]);
+  }, [esewaStatus, orderId, userInfo, order]);
 
   if (loading) return <Loader />;
   if (error) return <p className="text-red-500">{error}</p>;
@@ -67,6 +73,21 @@ const OrderPage = () => {
   return (
     order && (
       <>
+        {justPaid && (
+          <div className="bg-white rounded-2xl shadow-soft p-8 mb-6 flex flex-col items-center text-center">
+            <span className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center text-3xl mb-4">
+              <FaCheck />
+            </span>
+            <h2 className="text-xl font-bold text-slate-900 mb-1">Payment Successful!</h2>
+            <p className="text-sm text-slate-500 mb-5">Your order has been paid and is being processed.</p>
+            <button
+              onClick={() => navigate('/')}
+              className="bg-brand-600 hover:bg-brand-700 text-white font-semibold py-2.5 px-8 rounded-lg transition-colors"
+            >
+              Continue
+            </button>
+          </div>
+        )}
         <h1 className="text-2xl font-bold mb-6 text-slate-900">Order <span className="text-slate-400 font-mono text-lg">{order._id}</span></h1>
         <div className="grid md:grid-cols-3 gap-8">
           {/* Left Column: Details */}
@@ -129,7 +150,7 @@ const OrderPage = () => {
               {!order.isPaid && order.paymentMethod !== 'COD' && order.paymentMethod !== 'eSewa' && (
                 <div className="mt-4">
                   <Elements stripe={stripePromise}>
-                    <CheckoutForm order={order} refetchOrder={fetchOrder} />
+                    <CheckoutForm order={order} refetchOrder={fetchOrder} onSuccess={() => setJustPaid(true)} />
                   </Elements>
                 </div>
               )}

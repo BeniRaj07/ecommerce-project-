@@ -4,7 +4,7 @@ import { useSelector } from 'react-redux';
 import API from '../api';
 import { toast } from 'react-toastify';
 
-const CheckoutForm = ({ order, refetchOrder }) => {
+const CheckoutForm = ({ order, refetchOrder, onSuccess }) => {
   const stripe = useStripe();
   const elements = useElements();
   const { userInfo } = useSelector((state) => state.auth);
@@ -43,7 +43,7 @@ const CheckoutForm = ({ order, refetchOrder }) => {
 
       await API.put(`/api/orders/${order._id}/pay`, paymentResult);
 
-      toast.success('Payment Successful!');
+      onSuccess();
       refetchOrder();
     } catch (err) {
       toast.error(err?.response?.data?.message || err.message);
