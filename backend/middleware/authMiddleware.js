@@ -17,6 +17,15 @@ const protect = async (req, res, next) => {
       // Finding the user by the ID that was stored in the token
       req.user = await User.findById(decoded.id).select('-password');
 
+      if (!req.user) {
+        // The token is valid but no longer points to a real user — e.g. a
+        // stale token from before `npm run data:import` recreated users
+        // with new IDs. Reject cleanly instead of letting `req.user` stay
+        // null and crash deeper in a controller.
+        res.status(401).json({ message: 'Not authorized, user not found' });
+        return;
+      }
+
       next(); // Moving on to the next function
     } catch (error) {
       console.error(error); // This will log the actual JWT error
