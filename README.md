@@ -1,6 +1,6 @@
 <div align="center">
-  <h1>🛒 E-Commerce Pro</h1>
-  <p>A Full-Stack MERN Application with Secure Payment Processing</p>
+  <h1>👟 Juttax</h1>
+  <p>Nepal's Marketplace for Handmade, Custom-Made & Everyday Footwear</p>
 
   <img src="https://img.shields.io/badge/MongoDB-4EA94B?style=for-the-badge&logo=mongodb&logoColor=white" alt="MongoDB" />
   <img src="https://img.shields.io/badge/Express.js-404D59?style=for-the-badge" alt="Express" />
@@ -12,26 +12,26 @@
 
 <br />
 
-**Live Demo:** [E-Commerce Pro on Netlify](https://buildsbysaif-ecommerce-pro.netlify.app/)  
-
-
 ## 📖 Project Overview
 
-This repository contains the source code for **E-Commerce Pro**, a complete, responsive e-commerce platform developed as part of an internship at Navodita Infotech. 
+**Juttax** is a full-stack MERN marketplace focused entirely on footwear — connecting Nepali shoemakers, cobblers and retailers (in Kathmandu, Lalitpur, Bhaktapur, Pokhara, Biratnagar and beyond) with shoppers looking for everything from everyday sneakers to handmade traditional jutta and made-to-order custom shoes.
 
-Built on the MERN stack, this project goes beyond a simple CRUD application by implementing real-world features such as persistent cart state management, role-based authorization, and secure payment simulation via the Stripe API.
+Built on the MERN stack, it implements persistent cart state management, role-based authorization, and secure payment simulation via the Stripe API — plus a footwear-specific catalog with sizes, colors, materials, maker/seller info, and Nepal-focused filtering.
 
 ## ✨ Core Features
 
-### For Users (Client-Facing)
+### For Shoppers
 * **Authentication & Security:** Secure registration and login using JWT (JSON Web Tokens) and bcryptjs for password hashing.
-* **Dynamic Catalog:** Search functionality and category filtering to easily browse products.
+* **Full Footwear Category Tree:** Men, Women, Kids, Traditional & Handmade, Custom Made, Local Leather Collection, Sports & Outdoor, School & Uniform, and Work & Utility — each with detailed sub-categories.
+* **Rich Filtering:** Filter any listing by price, size, color, material, maker/seller, location, handmade, made in Nepal, ready stock vs. made to order, and rating.
+* **Shop by Maker:** Browse footwear directly by the maker's city — Kathmandu, Lalitpur, Bhaktapur, Pokhara, Biratnagar, or other local sellers.
+* **Featured Local Collections:** Curated views for Made in Nepal, Handmade, New Arrivals, Best Selling, Budget and Premium footwear.
 * **Interactive Shopping Cart:** Persistent cart state managed by Redux Toolkit and LocalStorage.
 * **Secure Checkout:** Multi-step checkout flow handling shipping details and Stripe payment processing.
 * **User Dashboard:** Logged-in users can manage their profiles, leave product reviews, and track order history.
 
 ### For Administrators (Admin Dashboard)
-* **Inventory Management:** Full CRUD capabilities for adding, editing, and deleting products with image upload support.
+* **Inventory Management:** Full CRUD for products, including category/sub-category, sizes, colors, material, maker/location, handmade & made-in-Nepal flags, and stock type.
 * **Order Fulfillment:** Dedicated portal to view customer orders and update delivery statuses.
 * **User Management:** Ability to view the user base and revoke access for non-admin accounts.
 
@@ -42,25 +42,28 @@ The application follows a strict separation of concerns utilizing a **RESTful AP
 * **Backend (API):** Node.js and Express handle business logic, routing, and token validation via custom middleware.
 * **Database:** MongoDB stores documents (Users, Products, Orders) utilizing Mongoose as the Object Data Modeling (ODM) library.
 
-
 ## 🚀 How to Run Locally
 
-To set up and run this project on a local machine, please follow these steps:
+1.  **Clone the repository** and set up environment variables (`.env` in both `backend` and `frontend`).
 
-1.  **Clone the repository:**
-    ```bash
-    git clone [https://github.com/buildsbysaif/mern-ecommerce-project.git](https://github.com/buildsbysaif/mern-ecommerce-project.git)
-    ```
-2.  **Set up Environment Variables:**
-    Create a `.env` file in the `backend` folder and another in the `frontend` folder, then add the required API keys and secrets.
-
-3.  **Install Backend Dependencies & Start Server:**
+2.  **Install & start the backend:**
     ```bash
     cd backend
     npm install
     npm run server
     ```
-4.  **Install Frontend Dependencies & Start Client:**
+
+3.  **Seed demo data (admin + demo user, full footwear catalog):**
+    ```bash
+    npm run data:import
+    ```
+    This creates two accounts:
+    * **Admin:** `admin@juttax.com` / `Juttax@Admin123`
+    * **Demo user:** `demo@juttax.com` / `Demo@1234`
+
+    ⚠️ These are development-only credentials seeded in plain text in `backend/data/users.js` — change them before deploying anywhere public.
+
+4.  **Install & start the frontend:**
     (In a new terminal)
     ```bash
     cd frontend

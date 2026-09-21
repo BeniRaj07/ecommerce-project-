@@ -1,5 +1,7 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import { FaFacebook, FaTwitter, FaInstagram } from 'react-icons/fa';
+import { topNav, makerLocations } from '../data/categories';
 
 const Footer = () => {
   return (
@@ -7,9 +9,9 @@ const Footer = () => {
       <div className="container mx-auto px-4">
         {/* Feature Icons Section */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-8 text-center border-b border-gray-700 pb-8">
-            <div><i className="fas fa-box-open text-3xl mb-2 text-indigo-400"></i><p>Everyday fresh products</p></div>
+            <div><i className="fas fa-hands text-3xl mb-2 text-indigo-400"></i><p>Handmade by local artisans</p></div>
             <div><i className="fas fa-shipping-fast text-3xl mb-2 text-indigo-400"></i><p>Free delivery over Rs 500/-</p></div>
-            <div><i className="fas fa-percent text-3xl mb-2 text-indigo-400"></i><p>Daily Mega Discounts</p></div>
+            <div><i className="fas fa-map-marker-alt text-3xl mb-2 text-indigo-400"></i><p>Made in Nepal, sold locally</p></div>
             <div><i className="fas fa-award text-3xl mb-2 text-indigo-400"></i><p>Best price on the market</p></div>
         </div>
 
@@ -17,7 +19,7 @@ const Footer = () => {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8 py-8">
             <div>
                 <h3 className="font-bold mb-4">ABOUT US</h3>
-                <p className="text-gray-400">E-Commerce Pro is your one-stop shop for the best products online.</p>
+                <p className="text-gray-400">Juttax connects Nepali footwear makers — from Kathmandu to Biratnagar — with shoppers looking for handmade, custom and everyday footwear.</p>
                 <div className="flex space-x-4 mt-4">
                     <a href="#" className="hover:text-indigo-400"><FaFacebook size={20}/></a>
                     <a href="#" className="hover:text-indigo-400"><FaTwitter size={20}/></a>
@@ -27,17 +29,21 @@ const Footer = () => {
             <div>
                 <h3 className="font-bold mb-4">CATEGORIES</h3>
                 <ul>
-                    <li className="mb-2"><a href="/category/fashion" className="text-gray-400 hover:text-white">Fashion</a></li>
-                    <li className="mb-2"><a href="/category/electronics" className="text-gray-400 hover:text-white">Electronics</a></li>
-                    <li className="mb-2"><a href="/category/groceries" className="text-gray-400 hover:text-white">Groceries</a></li>
+                    {topNav.map((item) => (
+                      <li className="mb-2" key={item.label}>
+                        <Link to={item.to} className="text-gray-400 hover:text-white">{item.label}</Link>
+                      </li>
+                    ))}
                 </ul>
             </div>
             <div>
-                <h3 className="font-bold mb-4">USEFUL LINKS</h3>
+                <h3 className="font-bold mb-4">SHOP BY MAKER</h3>
                 <ul>
-                    <li className="mb-2"><a href="#" className="text-gray-400 hover:text-white">Terms of Service</a></li>
-                    <li className="mb-2"><a href="#" className="text-gray-400 hover:text-white">Privacy Policy</a></li>
-                    <li className="mb-2"><a href="mailto:support@ecommercepro.com" className="text-gray-400 hover:text-white">Contact Us</a></li>
+                    {makerLocations.map((loc) => (
+                      <li className="mb-2" key={loc.slug}>
+                        <Link to={`/makers/${loc.slug}`} className="text-gray-400 hover:text-white">{loc.label}</Link>
+                      </li>
+                    ))}
                 </ul>
             </div>
             <div>

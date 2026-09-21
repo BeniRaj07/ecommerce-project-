@@ -1,19 +1,124 @@
 import Product from '../models/productModel.js';
 
-// @desc  --->  Fetch all products
+const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+// @desc  --->  Fetch all products (supports keyword search + the full Juttax filter set)
 // @route --->  GET /api/products
 // @access  Public
 const getProducts = async (req, res) => {
-  const keyword = req.query.keyword
-    ? { name: { $regex: req.query.keyword, $options: 'i' } }
-    : {};
-  
-  // uses a case-insensitive search for category
-  const category = req.query.category
-    ? { category: { $regex: req.query.category, $options: 'i' } }
-    : {};
+  const {
+    keyword,
+    category, // mainCategory, exact name e.g. "Men"
+    sub, // subCategory, exact name e.g. "Sneakers"
+    minPrice,
+    maxPrice,
+    size,
+    color,
+    material,
+    maker,
+    location,
+    handmade,
+    madeInNepal,
+    stockType,
+    minRating,
+  } = req.query;
 
-  const products = await Product.find({ ...keyword, ...category });
+  const filter = {};
+
+  if (keyword) {
+    filter.name = { $regex: escapeRegex(keyword), $options: 'i' };
+  }
+
+  if (category) {
+    filter.mainCategory = { $regex: `^${escapeRegex(category)}$`, $options: 'i' };
+  }
+
+  if (sub) {
+    filter.subCategory = { $regex: `^${escapeRegex(sub)}$`, $options: 'i' };
+  }
+
+  if (minPrice || maxPrice) {
+    filter.price = {};
+    if (minPrice) filter.price.$gte = Number(minPrice);
+    if (maxPrice) filter.price.$lte = Number(maxPrice);
+  }
+
+  if (size) {
+    const sizes = String(size)
+      .split(',')
+      .map((s) => Number(s.trim()))
+      .filter((s) => !Number.isNaN(s));
+    if (sizes.length) filter.sizes = { $in: sizes };
+  }
+
+  if (color) {
+    const colors = String(color)
+      .split(',')
+      .map((c) => c.trim())
+      .filter(Boolean);
+    if (colors.length) {
+      filter.colors = { $in: colors.map((c) => new RegExp(`^${escapeRegex(c)}$`, 'i')) };
+    }
+  }
+
+  if (material) {
+    // substring match — many products list compound materials like "Leather & Rubber"
+    filter.material = { $regex: escapeRegex(material), $options: 'i' };
+  }
+
+  if (maker) {
+    filter['maker.name'] = { $regex: escapeRegex(maker), $options: 'i' };
+  }
+
+  if (location) {
+    const locations = String(location).split(',').map((l) => l.trim()).filter(Boolean);
+    if (locations.length) {
+      filter['maker.location'] = { $in: locations.map((l) => new RegExp(`^${escapeRegex(l)}$`, 'i')) };
+    }
+  }
+
+  if (handmade === 'true') {
+    filter.isHandmade = true;
+  }
+
+  if (madeInNepal === 'true') {
+    filter.madeInNepal = true;
+  }
+
+  if (stockType) {
+    const types = String(stockType).split(',').map((s) => s.trim()).filter(Boolean);
+    if (types.length) {
+      filter.stockType = { $in: types.map((t) => new RegExp(`^${escapeRegex(t)}$`, 'i')) };
+    }
+  }
+
+  if (minRating) {
+    filter.rating = { $gte: Number(minRating) };
+  }
+
+  let query = Product.find(filter);
+
+  switch (req.query.sort) {
+    case 'newest':
+      query = query.sort({ createdAt: -1 });
+      break;
+    case 'bestselling':
+      query = query.sort({ numReviews: -1, rating: -1 });
+      break;
+    case 'price_asc':
+      query = query.sort({ price: 1 });
+      break;
+    case 'price_desc':
+      query = query.sort({ price: -1 });
+      break;
+    case 'rating':
+      query = query.sort({ rating: -1 });
+      break;
+    default:
+      break;
+  }
+
+  const products = await query;
   res.json(products);
 };
 
@@ -84,12 +189,20 @@ const createProductReview = async (req, res) => {
 // @access --->  Private/Admin
 const createProduct = async (req, res) => {
   const product = new Product({
-    name: 'Sample name',
+    name: 'Sample Jutta',
     price: 0,
     user: req.user._id,
-    image: '/images/sample.jpg',
-    brand: 'Sample brand',
-    category: 'Sample category',
+    image: '/images/icons/footwear.png',
+    brand: 'Sample Brand',
+    mainCategory: 'Men',
+    subCategory: 'Casual Shoes',
+    sizes: [40],
+    colors: ['Black'],
+    material: 'Synthetic',
+    maker: { name: 'Sample Maker', location: 'Kathmandu' },
+    isHandmade: false,
+    madeInNepal: true,
+    stockType: 'Ready Stock',
     countInStock: 0,
     numReviews: 0,
     description: 'Sample description',
@@ -103,8 +216,23 @@ const createProduct = async (req, res) => {
 // @route --->  PUT /api/products/:id
 // @access  Private/Admin
 const updateProduct = async (req, res) => {
-  const { name, price, description, image, brand, category, countInStock } =
-    req.body;
+  const {
+    name,
+    price,
+    description,
+    image,
+    brand,
+    mainCategory,
+    subCategory,
+    countInStock,
+    sizes,
+    colors,
+    material,
+    maker,
+    isHandmade,
+    madeInNepal,
+    stockType,
+  } = req.body;
   const product = await Product.findById(req.params.id);
 
   if (product) {
@@ -113,8 +241,16 @@ const updateProduct = async (req, res) => {
     product.description = description;
     product.image = image;
     product.brand = brand;
-    product.category = category;
+    product.mainCategory = mainCategory;
+    product.subCategory = subCategory;
     product.countInStock = countInStock;
+    if (sizes !== undefined) product.sizes = sizes;
+    if (colors !== undefined) product.colors = colors;
+    if (material !== undefined) product.material = material;
+    if (maker !== undefined) product.maker = maker;
+    if (isHandmade !== undefined) product.isHandmade = isHandmade;
+    if (madeInNepal !== undefined) product.madeInNepal = madeInNepal;
+    if (stockType !== undefined) product.stockType = stockType;
 
     const updatedProduct = await product.save();
     res.json(updatedProduct);

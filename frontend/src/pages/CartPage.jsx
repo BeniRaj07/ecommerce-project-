@@ -34,7 +34,16 @@ const CartPage = () => {
               <div key={item._id} className="flex items-center justify-between border-b pb-4">
                 <div className="flex items-center space-x-4">
                   <img src={item.image} alt={item.name} className="w-16 h-16 object-cover rounded" />
-                  <Link to={`/product/${item._id}`} className="hover:underline">{item.name}</Link>
+                  <div>
+                    <Link to={`/product/${item._id}`} className="hover:underline">{item.name}</Link>
+                    {(item.selectedSize || item.selectedColor) && (
+                      <p className="text-xs text-gray-500">
+                        {item.selectedSize && `Size: ${item.selectedSize}`}
+                        {item.selectedSize && item.selectedColor && ' · '}
+                        {item.selectedColor && `Color: ${item.selectedColor}`}
+                      </p>
+                    )}
+                  </div>
                 </div>
                 
                 <div className="font-bold">Rs {item.price}/-</div>

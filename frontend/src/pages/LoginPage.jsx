@@ -41,7 +41,7 @@ const LoginPage = () => {
     <div className="min-h-[60vh] flex items-center justify-center bg-gray-50">
       <div className="w-full max-w-md p-8 space-y-6 bg-white shadow-lg rounded-lg">
         <div className="flex justify-center">
-            <img src="/e-logo.png" alt="Logo" className="h-16 w-auto"/>
+            <span className="text-3xl font-extrabold tracking-tight text-indigo-600">Juttax</span>
         </div>
         <h1 className="text-2xl font-bold text-center text-gray-900">Sign In</h1>
         {loading && <Loader />}

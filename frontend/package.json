@@ -1,5 +1,5 @@
 {
-  "name": "ecommerce-pro-frontend",
+  "name": "juttax-frontend",
   "private": true,
   "version": "1.0.0",
   "type": "module",
@@ -12,10 +12,10 @@
   "author": "Saif Sultan",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/buildsbysaif/mern-ecommerce-project.git"
+    "url": "git+https://github.com/BeniRaj07/ecommerce-project-.git"
   },
   "bugs": {
-    "url": "https://github.com/buildsbysaif/mern-ecommerce-project/issues"
+    "url": "https://github.com/BeniRaj07/ecommerce-project-/issues"
   },
   "dependencies": {
     "@reduxjs/toolkit": "^2.8.2",

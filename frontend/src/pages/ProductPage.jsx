@@ -6,10 +6,13 @@ import { addToCart } from '../store/slices/cartSlice';
 import Rating from '../components/Rating';
 import Loader from '../components/Loader';
 import { toast } from 'react-toastify';
+import { slugify } from '../data/categories';
 
 const ProductPage = () => {
   const [product, setProduct] = useState({ reviews: [] });
   const [qty, setQty] = useState(1);
+  const [selectedSize, setSelectedSize] = useState(null);
+  const [selectedColor, setSelectedColor] = useState(null);
   const [loading, setLoading] = useState(true);
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState('');
@@ -25,6 +28,8 @@ const ProductPage = () => {
     try {
       const { data } = await API.get(`/api/products/${productId}`);
       setProduct(data);
+      setSelectedSize(data.sizes?.[0] ?? null);
+      setSelectedColor(data.colors?.[0] ?? null);
     } catch (error) {
       toast.error(error?.response?.data?.message || error.message);
     } finally {
@@ -37,7 +42,7 @@ const ProductPage = () => {
   }, [productId]);
 
   const addToCartHandler = () => {
-    dispatch(addToCart({ ...product, qty }));
+    dispatch(addToCart({ ...product, qty, selectedSize, selectedColor }));
     navigate('/cart');
   };
 
@@ -62,19 +67,86 @@ const ProductPage = () => {
       <Link to='/' className='inline-block mb-4 bg-gray-200 hover:bg-gray-300 text-black font-bold py-2 px-4 rounded'>
         Go Back
       </Link>
-      
+
+      {product.mainCategory && (
+        <p className="text-sm text-gray-500 mb-4">
+          <Link to={`/category/${slugify(product.mainCategory)}`} className="hover:underline">
+            {product.mainCategory}
+          </Link>
+          {' / '}
+          {product.subCategory}
+        </p>
+      )}
+
       <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-1">
           <img src={product.image} alt={product.name} className="w-full rounded-lg shadow-lg" />
         </div>
 
         <div className="md:col-span-1 lg:col-span-1">
+          <div className="flex flex-wrap gap-2 mb-2">
+            {product.isHandmade && (
+              <span className="text-xs bg-amber-100 text-amber-800 font-semibold px-2 py-0.5 rounded-full">Handmade</span>
+            )}
+            {product.madeInNepal && (
+              <span className="text-xs bg-emerald-100 text-emerald-800 font-semibold px-2 py-0.5 rounded-full">Made in Nepal</span>
+            )}
+            {product.stockType && (
+              <span className="text-xs bg-indigo-100 text-indigo-800 font-semibold px-2 py-0.5 rounded-full">{product.stockType}</span>
+            )}
+          </div>
           <h1 className="text-3xl font-bold mb-2">{product.name}</h1>
           <div className="text-lg mb-4 border-b pb-4">
             <Rating value={product.rating} text={`${product.numReviews} reviews`} />
           </div>
           <p className="text-xl mb-4">Price: Rs {product.price}/-</p>
-          <p className="leading-relaxed">{product.description}</p>
+          <p className="leading-relaxed mb-4">{product.description}</p>
+
+          {product.material && (
+            <p className="mb-2"><strong>Material:</strong> {product.material}</p>
+          )}
+
+          {product.sizes?.length > 0 && (
+            <div className="mb-3">
+              <strong className="block mb-1">Size</strong>
+              <div className="flex flex-wrap gap-2">
+                {product.sizes.map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => setSelectedSize(s)}
+                    className={`w-10 h-10 text-sm rounded border ${selectedSize === s ? 'bg-gray-800 text-white border-gray-800' : 'bg-white text-gray-700'}`}
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {product.colors?.length > 0 && (
+            <div className="mb-3">
+              <strong className="block mb-1">Color</strong>
+              <div className="flex flex-wrap gap-2">
+                {product.colors.map((c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => setSelectedColor(c)}
+                    className={`text-sm px-3 py-1 rounded border ${selectedColor === c ? 'bg-gray-800 text-white border-gray-800' : 'bg-white text-gray-700'}`}
+                  >
+                    {c}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {product.maker?.name && (
+            <p className="text-sm text-gray-600 mt-4 border-t pt-3">
+              Sold by <strong>{product.maker.name}</strong> · {product.maker.location}
+            </p>
+          )}
         </div>
 
         <div className="md:col-span-2 lg:col-span-1">

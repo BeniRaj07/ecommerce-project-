@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom'; 
+import { Link } from 'react-router-dom';
 import { Carousel } from 'react-responsive-carousel';
 import 'react-responsive-carousel/lib/styles/carousel.min.css';
-import axios from 'axios';
+import API from '../api';
 import Loader from './Loader';
 
 const ProductCarousel = () => {
@@ -10,37 +10,17 @@ const ProductCarousel = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchAndFilterTopProducts = async () => {
+    const fetchTopProducts = async () => {
       try {
-        const { data: topProducts } = await axios.get('http://localhost:5000/api/products/top');
-
-        const desiredCategories = ['Electronics', 'Footwear', 'Bags', 'Fashion'];
-        const featuredProducts = [];
-        const seenCategories = new Set();
-
-        for (const product of topProducts) {
-          if (desiredCategories.includes(product.category) && !seenCategories.has(product.category)) {
-            featuredProducts.push(product);
-            seenCategories.add(product.category);
-          }
-        }
-
-        for (const product of topProducts) {
-            if (featuredProducts.length >= 5) break;
-            if (!featuredProducts.find(p => p._id === product._id)) {
-                featuredProducts.push(product);
-            }
-        }
-        
-        setProducts(featuredProducts);
-
+        const { data: topProducts } = await API.get('/api/products/top');
+        setProducts(topProducts.slice(0, 5));
       } catch (error) {
         console.error(error);
       } finally {
         setLoading(false);
       }
     };
-    fetchAndFilterTopProducts();
+    fetchTopProducts();
   }, []);
 
   return loading ? <Loader /> : (

@@ -30,8 +30,9 @@ const Header = () => {
         <div className="container mx-auto">
           <div className="flex justify-between items-center">
             <div className="flex items-center">
-              <Link to="/">
-                <img src="/e-logo.png" alt="E-Commerce Pro Logo" className="h-14 w-auto" />
+              <Link to="/" className="flex items-center gap-2">
+                <img src="/images/icons/footwear.png" alt="Juttax" className="h-10 w-10" />
+                <span className="text-2xl font-extrabold tracking-tight text-indigo-600">Juttax</span>
               </Link>
               <div className="ml-4 hidden md:block">
                 <button onClick={() => setIsLocationModalOpen(true)} className="flex items-center text-sm text-gray-500 hover:text-indigo-600">

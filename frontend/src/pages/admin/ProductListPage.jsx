@@ -68,6 +68,7 @@ const ProductListPage = () => {
                 <th className="text-left py-3 px-4 uppercase font-semibold text-sm">Name</th>
                 <th className="text-left py-3 px-4 uppercase font-semibold text-sm">Price</th>
                 <th className="text-left py-3 px-4 uppercase font-semibold text-sm">Category</th>
+                <th className="text-left py-3 px-4 uppercase font-semibold text-sm">Maker</th>
                 <th className="text-left py-3 px-4 uppercase font-semibold text-sm">Brand</th>
                 <th className="text-left py-3 px-4 uppercase font-semibold text-sm"></th>
               </tr>
@@ -78,7 +79,8 @@ const ProductListPage = () => {
                   <td className="py-3 px-4">{product._id}</td>
                   <td className="py-3 px-4">{product.name}</td>
                   <td className="py-3 px-4">Rs {product.price}/-</td>
-                  <td className="py-3 px-4">{product.category}</td>
+                  <td className="py-3 px-4">{product.mainCategory} / {product.subCategory}</td>
+                  <td className="py-3 px-4">{product.maker?.name} · {product.maker?.location}</td>
                   <td className="py-3 px-4">{product.brand}</td>
                   <td className="py-3 px-4 flex items-center">
                     <Link to={`/admin/product/${product._id}/edit`}>
