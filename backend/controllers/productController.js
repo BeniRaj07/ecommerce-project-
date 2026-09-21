@@ -194,7 +194,9 @@ const createProductReview = async (req, res) => {
   const alreadyReviewed =
     orderItem.reviewed ||
     product.reviews.some(
-      (r) => r.user.toString() === req.user._id.toString() && r.order.toString() === orderId
+      // r.order is unset on reviews created before that field existed —
+      // guard it rather than crashing on legacy data.
+      (r) => r.user.toString() === req.user._id.toString() && r.order?.toString() === orderId
     );
 
   if (alreadyReviewed) {

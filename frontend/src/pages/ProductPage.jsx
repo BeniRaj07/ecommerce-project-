@@ -62,6 +62,7 @@ const ProductPage = () => {
   const [comment, setComment] = useState('');
   const [canReview, setCanReview] = useState(false);
   const [reviewCheckDone, setReviewCheckDone] = useState(false);
+  const [reviewOrderId, setReviewOrderId] = useState(null);
   const imgRef = useRef(null);
 
   const { id: productId } = useParams();
@@ -96,10 +97,13 @@ const ProductPage = () => {
       }
       try {
         const { data } = await API.get('/api/orders/myorders');
-        const eligible = data.some(
-          (order) => order.isDelivered && order.orderItems.some((item) => item.product === productId)
+        const eligibleOrder = data.find(
+          (order) =>
+            order.orderStatus === 'delivered' &&
+            order.orderItems.some((item) => item.product === productId && !item.reviewed)
         );
-        setCanReview(eligible);
+        setCanReview(Boolean(eligibleOrder));
+        setReviewOrderId(eligibleOrder?._id || null);
       } catch {
         setCanReview(false);
       } finally {
@@ -117,7 +121,7 @@ const ProductPage = () => {
   const submitHandler = async (e) => {
     e.preventDefault();
     try {
-      await API.post(`/api/products/${productId}/reviews`, { rating, comment });
+      await API.post(`/api/products/${productId}/reviews`, { rating, comment, orderId: reviewOrderId });
       toast.success('Review Submitted!');
       setRating(0);
       setComment('');

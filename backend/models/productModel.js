@@ -12,9 +12,11 @@ const reviewSchema = mongoose.Schema(
       required: true,
       ref: 'User',
     },
+    // Not required: reviews created before this field existed have none,
+    // and re-validating them on every future product.save() would break
+    // otherwise-unrelated updates to that product.
     order: {
       type: mongoose.Schema.Types.ObjectId,
-      required: true,
       ref: 'Order',
     },
   },
