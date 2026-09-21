@@ -30,12 +30,12 @@ const CartPage = () => {
   return (
     <div className="grid md:grid-cols-3 gap-8">
       <div className="md:col-span-2">
-        <h1 className="text-2xl font-bold mb-6">Shopping Cart</h1>
+        <h1 className="font-display text-2xl font-bold mb-6">Shopping Cart</h1>
         {cartItems.length === 0 ? (
           <div className="bg-white rounded-2xl shadow-soft p-10 text-center">
             <FaShoppingBag className="mx-auto text-4xl text-slate-300 mb-3" />
             <p className="text-slate-500 mb-4">Your cart is empty</p>
-            <Link to="/" className="inline-block bg-brand-600 hover:bg-brand-700 text-white font-semibold py-2 px-5 rounded-lg text-sm transition-colors">
+            <Link to="/" className="inline-block bg-brand-600 hover:bg-brand-700 text-white font-semibold py-2 px-5 rounded-full text-sm transition-colors">
               Continue Shopping
             </Link>
           </div>
@@ -94,7 +94,7 @@ const CartPage = () => {
             </div>
           </div>
           <button
-            className="w-full bg-brand-600 text-white py-2.5 mt-2 rounded-lg font-semibold hover:bg-brand-700 disabled:bg-slate-300 transition-colors"
+            className="w-full bg-brand-600 text-white py-2.5 mt-2 rounded-full font-semibold hover:bg-brand-700 disabled:bg-slate-300 transition-colors"
             disabled={cartItems.length === 0}
             onClick={checkoutHandler}
           >

@@ -238,7 +238,7 @@ const ProductEditPage = () => {
             <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={4} className={inputClass} />
           </div>
 
-          <button type="submit" className="w-full bg-brand-600 hover:bg-brand-700 text-white font-semibold py-2.5 rounded-lg transition-colors">
+          <button type="submit" className="w-full bg-brand-600 hover:bg-brand-700 text-white font-semibold py-2.5 rounded-full transition-colors">
             Update Product
           </button>
         </form>

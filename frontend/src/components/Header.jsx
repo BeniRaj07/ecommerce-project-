@@ -59,10 +59,10 @@ const Header = () => {
                   </Link>
                 )}
                 {!userInfo?.isAdmin && (
-                  <Link id="cart-icon" to="/cart" className="ml-5 relative text-slate-600 hover:text-brand-600 transition-colors">
-                    <FaShoppingCart className="text-xl" />
+                  <Link id="cart-icon" to="/cart" className="ml-5 relative w-10 h-10 rounded-full bg-brand-600 hover:bg-brand-700 text-white flex items-center justify-center transition-colors">
+                    <FaShoppingCart className="text-base" />
                     {cartItems.length > 0 && (
-                      <span className="absolute -top-2 -right-2.5 bg-brand-600 text-white text-[10px] font-bold rounded-full h-5 w-5 flex items-center justify-center">
+                      <span className="absolute -top-1.5 -right-1.5 bg-slate-900 text-white text-[10px] font-bold rounded-full h-5 w-5 flex items-center justify-center border-2 border-white">
                         {cartItems.reduce((acc, item) => acc + item.qty, 0)}
                       </span>
                     )}

@@ -30,7 +30,7 @@ const ShippingPage = () => {
           <img src="/images/icons/footwear.png" alt="Juttax" className="h-8 w-8" />
           <span className="text-2xl font-extrabold tracking-tight text-slate-900">Juttax</span>
         </Link>
-        <h1 className="text-2xl font-bold mb-6 text-center text-slate-900">Shipping</h1>
+        <h1 className="font-display text-2xl font-bold mb-6 text-center text-slate-900">Shipping</h1>
         <form onSubmit={submitHandler} className="bg-white shadow-soft rounded-2xl p-6 space-y-4">
           <div>
             <label className={labelClass} htmlFor="address">Address</label>
@@ -57,7 +57,7 @@ const ShippingPage = () => {
             />
           </div>
           <button
-            className="w-full bg-brand-600 hover:bg-brand-700 text-white font-semibold py-2.5 rounded-lg transition-colors"
+            className="w-full bg-brand-600 hover:bg-brand-700 text-white font-semibold py-2.5 rounded-full transition-colors"
             type="submit"
           >
             Continue

@@ -140,13 +140,13 @@ const OrderPage = () => {
             <p className="text-sm text-slate-500 mb-5">Your order has been paid and is being processed.</p>
             <button
               onClick={() => navigate('/')}
-              className="bg-brand-600 hover:bg-brand-700 text-white font-semibold py-2.5 px-8 rounded-lg transition-colors"
+              className="bg-brand-600 hover:bg-brand-700 text-white font-semibold py-2.5 px-8 rounded-full transition-colors"
             >
               Continue
             </button>
           </div>
         )}
-        <h1 className="text-2xl font-bold mb-6 text-slate-900">Order <span className="text-slate-400 font-mono text-lg">{order._id}</span></h1>
+        <h1 className="font-display text-2xl font-bold mb-6 text-slate-900">Order <span className="text-slate-400 font-mono text-lg">{order._id}</span></h1>
         <div className="grid md:grid-cols-3 gap-8">
           {/* Left Column: Details */}
           <div className="md:col-span-2 space-y-6">

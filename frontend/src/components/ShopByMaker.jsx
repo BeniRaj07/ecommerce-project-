@@ -8,7 +8,7 @@ const ShopByMaker = () => {
     <section className="py-14 bg-slate-50">
       <div className="container mx-auto px-4">
         <div className="text-center mb-9">
-          <h2 className="text-2xl font-bold text-slate-900">Shop by Maker</h2>
+          <h2 className="font-display text-3xl font-bold text-slate-900">Shop by Maker</h2>
           <p className="text-slate-500 text-sm mt-1">Buy directly from footwear makers and sellers across Nepal</p>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 max-w-3xl mx-auto">

@@ -82,7 +82,7 @@ const ProfilePage = () => {
             <label className="block text-slate-600 text-sm font-semibold mb-1.5">Confirm Password</label>
             <input type="password" placeholder="Confirm new password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className="w-full border border-slate-200 rounded-lg py-2 px-3 outline-none focus:ring-2 focus:ring-brand-500" />
           </div>
-          <button type="submit" className="w-full bg-brand-600 hover:bg-brand-700 disabled:bg-slate-300 text-white font-semibold py-2.5 rounded-lg transition-colors" disabled={loadingUpdate}>
+          <button type="submit" className="w-full bg-brand-600 hover:bg-brand-700 disabled:bg-slate-300 text-white font-semibold py-2.5 rounded-full transition-colors" disabled={loadingUpdate}>
             Update
           </button>
         </form>

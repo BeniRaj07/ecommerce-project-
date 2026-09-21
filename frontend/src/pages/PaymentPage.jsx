@@ -31,7 +31,7 @@ const PaymentPage = () => {
           <img src="/images/icons/footwear.png" alt="Juttax" className="h-8 w-8" />
           <span className="text-2xl font-extrabold tracking-tight text-slate-900">Juttax</span>
         </Link>
-        <h1 className="text-2xl font-bold mb-6 text-center text-slate-900">Payment Method</h1>
+        <h1 className="font-display text-2xl font-bold mb-6 text-center text-slate-900">Payment Method</h1>
         <form onSubmit={submitHandler} className="bg-white shadow-soft rounded-2xl p-6">
           <label className="block text-slate-600 text-sm font-semibold mb-3">Select Method</label>
           <div className="space-y-2.5">
@@ -59,7 +59,7 @@ const PaymentPage = () => {
             </label>
           </div>
           <button
-            className="w-full bg-brand-600 hover:bg-brand-700 text-white font-semibold py-2.5 rounded-lg mt-6 transition-colors"
+            className="w-full bg-brand-600 hover:bg-brand-700 text-white font-semibold py-2.5 rounded-full mt-6 transition-colors"
             type="submit"
           >
             Continue

@@ -44,7 +44,7 @@ const LoginPage = () => {
           <img src="/images/icons/footwear.png" alt="Juttax" className="h-8 w-8" />
           <span className="text-2xl font-extrabold tracking-tight text-slate-900">Juttax</span>
         </Link>
-        <h1 className="text-xl font-bold text-center text-slate-900">Sign In</h1>
+        <h1 className="font-display text-xl font-bold text-center text-slate-900">Sign In</h1>
         {loading && <Loader />}
         <form onSubmit={submitHandler} className="space-y-5">
           <div>
@@ -66,7 +66,7 @@ const LoginPage = () => {
             />
           </div>
           <button
-            className="w-full flex justify-center py-2.5 px-4 rounded-lg text-sm font-semibold text-white bg-brand-600 hover:bg-brand-700 disabled:bg-slate-300 transition-colors"
+            className="w-full flex justify-center py-2.5 px-4 rounded-full text-sm font-semibold text-white bg-brand-600 hover:bg-brand-700 disabled:bg-slate-300 transition-colors"
             type="submit"
             disabled={loading}
           >

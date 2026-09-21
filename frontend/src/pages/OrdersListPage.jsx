@@ -59,7 +59,7 @@ const OrdersListPage = () => {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold mb-6 text-slate-900">My Orders</h1>
+      <h1 className="font-display text-2xl font-bold mb-6 text-slate-900">My Orders</h1>
 
       <div className="flex flex-wrap gap-2 mb-6">
         {TABS.map((t) => (

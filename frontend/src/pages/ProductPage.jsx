@@ -167,7 +167,7 @@ const ProductPage = () => {
               <span className="text-xs bg-brand-100 text-brand-700 font-semibold px-2.5 py-1 rounded-full">{product.stockType}</span>
             )}
           </div>
-          <h1 className="text-3xl font-bold mb-2 text-slate-900">{product.name}</h1>
+          <h1 className="font-display text-3xl font-bold mb-2 text-slate-900">{product.name}</h1>
           <div className="text-lg mb-4 border-b border-slate-100 pb-4">
             <Rating value={product.rating} text={`${product.numReviews} reviews`} />
           </div>
@@ -244,7 +244,7 @@ const ProductPage = () => {
               </div>
             )}
             <button
-              className="w-full bg-brand-600 text-white py-2.5 mt-4 rounded-lg font-semibold hover:bg-brand-700 disabled:bg-slate-300 transition-colors"
+              className="w-full bg-brand-600 text-white py-2.5 mt-4 rounded-full font-semibold hover:bg-brand-700 disabled:bg-slate-300 transition-colors"
               disabled={product.countInStock === 0}
               onClick={addToCartHandler}
             >
@@ -294,7 +294,7 @@ const ProductPage = () => {
                 <label className="block text-slate-600 text-sm font-semibold mb-1.5">Comment</label>
                 <textarea required rows="3" value={comment} onChange={(e) => setComment(e.target.value)} className="p-2 border border-slate-200 rounded-lg w-full outline-none focus:ring-2 focus:ring-brand-500"></textarea>
               </div>
-              <button type="submit" className="bg-brand-600 text-white py-2 px-5 rounded-lg font-semibold hover:bg-brand-700 transition-colors">Submit</button>
+              <button type="submit" className="bg-brand-600 text-white py-2 px-5 rounded-full font-semibold hover:bg-brand-700 transition-colors">Submit</button>
             </form>
           ) : (
             <p className="p-4 bg-brand-50 rounded-2xl text-slate-700">

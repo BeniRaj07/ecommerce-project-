@@ -48,7 +48,7 @@ const AdminLayout = ({ title, actions, children }) => {
       <div className="flex-1 min-w-0">
         <div className="px-4 sm:px-8 py-6 max-w-7xl mx-auto">
           <div className="flex justify-between items-center mb-6 flex-wrap gap-3">
-            <h1 className="text-2xl font-bold text-slate-900">{title}</h1>
+            <h1 className="font-display text-2xl font-bold text-slate-900">{title}</h1>
             <div className="flex items-center gap-3 flex-wrap">
               {actions}
               <nav className="flex md:hidden gap-2">

@@ -52,7 +52,7 @@ const RegisterPage = () => {
           <img src="/images/icons/footwear.png" alt="Juttax" className="h-8 w-8" />
           <span className="text-2xl font-extrabold tracking-tight text-slate-900">Juttax</span>
         </Link>
-        <h1 className="text-xl font-bold mb-6 text-center text-slate-900">Sign Up</h1>
+        <h1 className="font-display text-xl font-bold mb-6 text-center text-slate-900">Sign Up</h1>
         <form onSubmit={submitHandler} className="space-y-5">
           <div>
             <label className="block text-sm font-semibold text-slate-600 mb-1.5" htmlFor="name">Name</label>
@@ -99,7 +99,7 @@ const RegisterPage = () => {
             />
           </div>
           <button
-            className="w-full bg-brand-600 hover:bg-brand-700 disabled:bg-slate-300 text-white font-semibold py-2.5 rounded-lg transition-colors"
+            className="w-full bg-brand-600 hover:bg-brand-700 disabled:bg-slate-300 text-white font-semibold py-2.5 rounded-full transition-colors"
             type="submit"
             disabled={loading}
           >

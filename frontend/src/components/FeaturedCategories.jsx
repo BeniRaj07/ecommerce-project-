@@ -15,7 +15,7 @@ const FeaturedCategories = () => {
     <section className="py-14 bg-white">
       <div className="container mx-auto px-4">
         <div className="text-center mb-9">
-          <h2 className="text-2xl font-bold text-slate-900">Shop by Category</h2>
+          <h2 className="font-display text-3xl font-bold text-slate-900">Shop by Category</h2>
           <p className="text-slate-500 text-sm mt-1">Find footwear for everyone, from everyday wear to festive traditions</p>
         </div>
         <div className="flex flex-wrap justify-center gap-4 sm:gap-6">

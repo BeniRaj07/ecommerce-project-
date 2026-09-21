@@ -67,7 +67,7 @@ const ProductListPage = () => {
   };
 
   const createButton = (
-    <button onClick={createProductHandler} className="bg-brand-600 hover:bg-brand-700 text-white py-2 px-4 rounded-lg flex items-center text-sm font-semibold transition-colors">
+    <button onClick={createProductHandler} className="bg-brand-600 hover:bg-brand-700 text-white py-2 px-4 rounded-full flex items-center text-sm font-semibold transition-colors">
       <FaPlus className="mr-2" /> Create Product
     </button>
   );

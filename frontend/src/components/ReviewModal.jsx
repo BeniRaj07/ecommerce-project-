@@ -49,7 +49,7 @@ const ReviewModal = ({ item, submitting = false, onSubmit, onMaybeLater }) => {
           <button
             onClick={() => onSubmit({ rating, comment })}
             disabled={!canSubmit}
-            className="flex-1 bg-brand-600 hover:bg-brand-700 disabled:bg-slate-300 text-white font-semibold py-2.5 rounded-lg transition-colors"
+            className="flex-1 bg-brand-600 hover:bg-brand-700 disabled:bg-slate-300 text-white font-semibold py-2.5 rounded-full transition-colors"
           >
             {submitting ? 'Submitting...' : 'Submit Review'}
           </button>

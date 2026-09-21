@@ -104,7 +104,7 @@ const PlaceOrderPage = () => {
           </div>
           <button
             type="button"
-            className="w-full bg-brand-600 text-white py-2.5 mt-2 rounded-lg font-semibold hover:bg-brand-700 disabled:bg-slate-300 transition-colors"
+            className="w-full bg-brand-600 text-white py-2.5 mt-2 rounded-full font-semibold hover:bg-brand-700 disabled:bg-slate-300 transition-colors"
             disabled={cart.cartItems.length === 0}
             onClick={placeOrderHandler}
           >
