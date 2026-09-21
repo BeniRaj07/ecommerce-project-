@@ -4,6 +4,7 @@ import API from '../../api';
 import { toast } from 'react-toastify';
 import Loader from '../../components/Loader';
 import AdminLayout from '../../components/AdminLayout';
+import ProductImage from '../../components/ProductImage';
 import { footwearCategories } from '../../data/categories';
 import { FaEdit, FaTrash, FaPlus } from 'react-icons/fa';
 
@@ -130,7 +131,7 @@ const ProductListPage = () => {
                   <tr key={product._id} className="hover:bg-slate-50">
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-3">
-                        <img src={product.image} alt={product.name} className="w-10 h-10 rounded-lg object-cover flex-shrink-0 bg-slate-100" />
+                        <ProductImage src={product.image} alt={product.name} className="w-10 h-10 rounded-lg object-cover flex-shrink-0 bg-slate-100" />
                         <span className="font-medium text-slate-800">{product.name}</span>
                       </div>
                     </td>

@@ -5,6 +5,7 @@ import API from '../api';
 import { addToCart } from '../store/slices/cartSlice';
 import Rating from '../components/Rating';
 import Loader from '../components/Loader';
+import ProductImage from '../components/ProductImage';
 import { toast } from 'react-toastify';
 import { slugify } from '../data/categories';
 
@@ -151,7 +152,7 @@ const ProductPage = () => {
 
       <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-1">
-          <img ref={imgRef} src={product.image} alt={product.name} className="w-full rounded-2xl shadow-soft" />
+          <ProductImage ref={imgRef} src={product.image} alt={product.name} className="w-full rounded-2xl shadow-soft" />
         </div>
 
         <div className="md:col-span-1 lg:col-span-1">

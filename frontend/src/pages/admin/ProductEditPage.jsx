@@ -4,6 +4,7 @@ import API from '../../api';
 import { toast } from 'react-toastify';
 import Loader from '../../components/Loader';
 import AdminLayout from '../../components/AdminLayout';
+import ProductImage from '../../components/ProductImage';
 import { footwearCategories, makerLocations, stockTypes } from '../../data/categories';
 
 const inputClass = 'w-full rounded-lg border border-slate-200 py-2 px-3 text-sm outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent';
@@ -142,7 +143,7 @@ const ProductEditPage = () => {
           <div>
             <label className={labelClass}>Image</label>
             <div className="flex items-center gap-4">
-              {image && <img src={image} alt="preview" className="w-16 h-16 rounded-lg object-cover flex-shrink-0 bg-slate-100" />}
+              {image && <ProductImage src={image} alt="preview" className="w-16 h-16 rounded-lg object-cover flex-shrink-0 bg-slate-100" />}
               <div className="flex-1 space-y-2">
                 <input type="text" value={image} onChange={(e) => setImage(e.target.value)} className={inputClass} />
                 <input type="file" onChange={uploadFileHandler} className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200" />

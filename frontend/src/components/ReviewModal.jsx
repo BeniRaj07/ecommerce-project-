@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { FaStar } from 'react-icons/fa';
+import ProductImage from './ProductImage';
 
 const ReviewModal = ({ item, submitting = false, onSubmit, onMaybeLater }) => {
   const [rating, setRating] = useState(0);
@@ -13,7 +14,7 @@ const ReviewModal = ({ item, submitting = false, onSubmit, onMaybeLater }) => {
       <div className="bg-white rounded-2xl shadow-card w-full max-w-sm p-6 text-center">
         <h2 className="text-lg font-bold text-slate-900 mb-4">How was your purchase?</h2>
 
-        <img src={item.image} alt={item.name} className="w-20 h-20 object-cover rounded-xl mx-auto mb-2" />
+        <ProductImage src={item.image} alt={item.name} className="w-20 h-20 object-cover rounded-xl mx-auto mb-2" />
         <p className="font-semibold text-slate-800 mb-4">{item.name}</p>
 
         <p className="text-sm font-semibold text-slate-600 mb-2">Your Rating</p>

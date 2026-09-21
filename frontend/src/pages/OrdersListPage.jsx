@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import API from '../api';
 import { toast } from 'react-toastify';
 import Loader from '../components/Loader';
+import ProductImage from '../components/ProductImage';
 import OrderStatusBadge from '../components/OrderStatusBadge';
 import {
   canRequestCancellation,
@@ -93,7 +94,7 @@ const OrdersListPage = () => {
               <div className="divide-y divide-slate-100 border-t border-slate-100">
                 {order.orderItems.map((item, idx) => (
                   <div key={idx} className="flex items-center gap-4 py-3">
-                    <img src={item.image} alt={item.name} className="w-14 h-14 object-cover rounded-xl flex-shrink-0" />
+                    <ProductImage src={item.image} alt={item.name} className="w-14 h-14 object-cover rounded-xl flex-shrink-0" />
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium text-slate-800 truncate">{item.name}</p>
                       <p className="text-xs text-slate-500">

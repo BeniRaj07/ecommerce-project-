@@ -1,11 +1,12 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import ProductImage from './ProductImage';
 
 const Product = ({ product }) => {
   return (
     <div className="bg-white rounded-2xl shadow-soft hover:shadow-card-hover overflow-hidden transition-all hover:-translate-y-0.5 group">
       <Link to={`/product/${product._id}`} className="block relative overflow-hidden">
-        <img
+        <ProductImage
           src={product.image}
           alt={product.name}
           className="w-full h-48 object-cover group-hover:scale-105 transition-transform duration-300"

@@ -4,6 +4,7 @@ import { Carousel } from 'react-responsive-carousel';
 import 'react-responsive-carousel/lib/styles/carousel.min.css';
 import API from '../api';
 import Loader from './Loader';
+import ProductImage from './ProductImage';
 
 const WHEEL_SWIPE_THRESHOLD = 30;
 const WHEEL_SWIPE_COOLDOWN = 600;
@@ -54,7 +55,7 @@ const ProductCarousel = () => {
         {products.map((product) => (
           <div key={product._id} className="relative bg-slate-100">
             <Link to={`/product/${product._id}`}>
-              <img src={product.image} alt={product.name} className="h-96 object-contain"/>
+              <ProductImage src={product.image} alt={product.name} className="h-96 object-contain"/>
               <p className="absolute bottom-4 left-1/2 -translate-x-1/2 text-white font-bold text-lg px-4 [text-shadow:0_1px_3px_rgba(0,0,0,0.9),0_0_12px_rgba(0,0,0,0.6)]">
                 {product.name} (Rs {product.price}/-)
               </p>

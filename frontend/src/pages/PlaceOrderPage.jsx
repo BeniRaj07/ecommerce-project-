@@ -4,6 +4,7 @@ import { useSelector, useDispatch } from 'react-redux';
 import { clearCartItems } from '../store/slices/cartSlice';
 import API from '../api';
 import { toast } from 'react-toastify';
+import ProductImage from '../components/ProductImage';
 
 const PlaceOrderPage = () => {
   const navigate = useNavigate();
@@ -72,7 +73,7 @@ const PlaceOrderPage = () => {
               {cart.cartItems.map((item, index) => (
                 <div key={index} className="flex items-center justify-between py-3">
                   <div className="flex items-center gap-4 min-w-0">
-                    <img src={item.image} alt={item.name} className="w-14 h-14 object-cover rounded-xl flex-shrink-0" />
+                    <ProductImage src={item.image} alt={item.name} className="w-14 h-14 object-cover rounded-xl flex-shrink-0" />
                     <Link to={`/product/${item._id}`} className="text-sm font-medium text-slate-800 hover:text-brand-600 truncate">{item.name}</Link>
                   </div>
                   <div className="text-sm text-slate-600 whitespace-nowrap">

@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { addToCart, removeFromCart } from '../store/slices/cartSlice';
 import { FaTrash, FaShoppingBag } from 'react-icons/fa';
+import ProductImage from '../components/ProductImage';
 
 const CartPage = () => {
   const navigate = useNavigate();
@@ -43,7 +44,7 @@ const CartPage = () => {
             {cartItems.map((item) => (
               <div key={item._id} className="flex items-center justify-between gap-4 p-4">
                 <div className="flex items-center gap-4 min-w-0">
-                  <img src={item.image} alt={item.name} className="w-16 h-16 object-cover rounded-xl flex-shrink-0" />
+                  <ProductImage src={item.image} alt={item.name} className="w-16 h-16 object-cover rounded-xl flex-shrink-0" />
                   <div className="min-w-0">
                     <Link to={`/product/${item._id}`} className="font-medium text-slate-800 hover:text-brand-600 truncate block">{item.name}</Link>
                     {(item.selectedSize || item.selectedColor) && (

@@ -3,6 +3,7 @@ import { Link, useParams, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import API from '../api';
 import Loader from '../components/Loader';
+import ProductImage from '../components/ProductImage';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements } from '@stripe/react-stripe-js';
 import CheckoutForm from '../components/CheckoutForm';
@@ -220,7 +221,7 @@ const OrderPage = () => {
                 {order.orderItems.map((item, index) => (
                   <div key={index} className="flex items-center justify-between py-3 gap-3 flex-wrap">
                     <div className="flex items-center gap-4 min-w-0">
-                      <img src={item.image} alt={item.name} className="w-14 h-14 object-cover rounded-xl flex-shrink-0" />
+                      <ProductImage src={item.image} alt={item.name} className="w-14 h-14 object-cover rounded-xl flex-shrink-0" />
                       <Link to={`/product/${item.product}`} className="text-sm font-medium text-slate-800 hover:text-brand-600 truncate">{item.name}</Link>
                     </div>
                     <div className="flex items-center gap-4">
