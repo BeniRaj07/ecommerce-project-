@@ -27,7 +27,7 @@ Built on the MERN stack, it implements persistent cart state management, role-ba
 * **Shop by Maker:** Browse footwear directly by the maker's city — Kathmandu, Lalitpur, or Bhaktapur.
 * **Featured Local Collections:** Curated views for Made in Nepal, Handmade, New Arrivals, Best Selling, Budget and Premium footwear.
 * **Interactive Shopping Cart:** Persistent cart state managed by Redux Toolkit and LocalStorage.
-* **Secure Checkout:** Multi-step checkout flow handling shipping details and Stripe payment processing.
+* **Secure Checkout:** Multi-step checkout flow handling shipping details and payment via Stripe (card/UPI), **eSewa** (Nepal's digital wallet, sandbox mode), or Cash on Delivery.
 * **User Dashboard:** Logged-in users can manage their profiles, leave product reviews, and track order history.
 
 ### For Administrators (Admin Dashboard)
@@ -68,6 +68,30 @@ To retheme the app, edit the `brand` color scale in `tailwind.config.js` — eve
 * Inputs: `border border-slate-200 rounded-lg focus:ring-2 focus:ring-brand-500`
 
 There's no separate CSS/SCSS layer beyond `index.css` (Tailwind directives + base font/background) — every component is styled directly with Tailwind utility classes, so the tokens above are the full extent of the "theme."
+
+## 💳 eSewa Sandbox Payments
+
+eSewa checkout uses eSewa's official **ePay v2** test/sandbox environment — no real money moves and no merchant account is required to try it.
+
+**How it works:**
+1. Choosing "Pay with eSewa" at checkout creates the order, then `POST /api/orders/:id/esewa/initiate` signs the order total (HMAC-SHA256) and returns a form the browser auto-submits to eSewa's sandbox (`rc-epay.esewa.com.np`).
+2. After completing (or cancelling) payment on eSewa, the user is redirected back to `/order/:id?esewa=success` or `?esewa=failure`.
+3. On success, `POST /api/orders/:id/esewa/verify` calls eSewa's server-side status-check API and marks the order paid only once eSewa confirms `COMPLETE`.
+
+**Config** (`backend/config/esewa.js`, overridable via env vars — defaults are eSewa's own published sandbox values, equivalent to Stripe's `4242...` test card):
+
+| Env var | Default |
+|---|---|
+| `ESEWA_PRODUCT_CODE` | `EPAYTEST` |
+| `ESEWA_SECRET_KEY` | `8gBm/:&EnhH.1/q` |
+| `ESEWA_PAYMENT_URL` | `https://rc-epay.esewa.com.np/api/epay/main/v2/form` |
+| `ESEWA_STATUS_URL` | `https://rc.esewa.com.np/api/epay/transaction/status/` |
+| `FRONTEND_URL` | `http://localhost:5173` (used to build the success/failure redirect URLs) |
+
+**Test login for the eSewa sandbox UI itself** (eSewa's published test accounts, needed to simulate completing a payment):
+* eSewa ID: `9806800001` through `9806800005`
+* Password: `Nepal@123`
+* OTP/Token: `123456`
 
 ## 🏗️ Architecture & Data Flow
 

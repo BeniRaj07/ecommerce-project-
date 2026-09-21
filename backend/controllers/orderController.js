@@ -1,6 +1,8 @@
+import crypto from 'crypto';
 import Order from '../models/orderModel.js';
 import Product from '../models/productModel.js';
 import User from '../models/userModel.js';
+import { ESEWA_CONFIG } from '../config/esewa.js';
 
 // @desc   ---> this  Creates new order
 // @route   ---> this POST /api/orders
@@ -116,6 +118,98 @@ const updateOrderToDelivered = async (req, res) => {
   }
 };
 
+// @desc  --->  Start an eSewa (sandbox) payment: sign the order total and
+//              hand back the fields the client form-posts to eSewa
+// @route --->  POST /api/orders/:id/esewa/initiate
+// @access  Private
+const initiateEsewaPayment = async (req, res) => {
+  const order = await Order.findById(req.params.id);
+
+  if (!order) {
+    res.status(404).json({ message: 'Order not found' });
+    return;
+  }
+
+  if (order.isPaid) {
+    res.status(400).json({ message: 'Order is already paid' });
+    return;
+  }
+
+  const transactionUuid = `${order._id}-${Date.now()}`;
+  const amount = Number(order.itemsPrice).toFixed(2);
+  const taxAmount = Number(order.taxPrice).toFixed(2);
+  const productServiceCharge = '0';
+  const productDeliveryCharge = Number(order.shippingPrice).toFixed(2);
+  const totalAmount = Number(order.totalPrice).toFixed(2);
+
+  const signedFieldNames = 'total_amount,transaction_uuid,product_code';
+  const message = `total_amount=${totalAmount},transaction_uuid=${transactionUuid},product_code=${ESEWA_CONFIG.productCode}`;
+  const signature = crypto
+    .createHmac('sha256', ESEWA_CONFIG.secretKey)
+    .update(message)
+    .digest('base64');
+
+  order.paymentResult = { id: transactionUuid, status: 'PENDING' };
+  await order.save();
+
+  res.json({
+    paymentUrl: ESEWA_CONFIG.paymentUrl,
+    fields: {
+      amount,
+      tax_amount: taxAmount,
+      total_amount: totalAmount,
+      transaction_uuid: transactionUuid,
+      product_code: ESEWA_CONFIG.productCode,
+      product_service_charge: productServiceCharge,
+      product_delivery_charge: productDeliveryCharge,
+      success_url: `${ESEWA_CONFIG.frontendUrl}/order/${order._id}?esewa=success`,
+      failure_url: `${ESEWA_CONFIG.frontendUrl}/order/${order._id}?esewa=failure`,
+      signed_field_names: signedFieldNames,
+      signature,
+    },
+  });
+};
+
+// @desc  --->  Confirm an eSewa payment with eSewa's status-check API and
+//              mark the order paid
+// @route --->  POST /api/orders/:id/esewa/verify
+// @access  Private
+const verifyEsewaPayment = async (req, res) => {
+  const order = await Order.findById(req.params.id);
+
+  if (!order) {
+    res.status(404).json({ message: 'Order not found' });
+    return;
+  }
+
+  const transactionUuid = order.paymentResult?.id;
+  if (!transactionUuid) {
+    res.status(400).json({ message: 'No eSewa transaction found for this order' });
+    return;
+  }
+
+  const statusUrl = `${ESEWA_CONFIG.statusCheckUrl}?product_code=${ESEWA_CONFIG.productCode}&total_amount=${Number(order.totalPrice).toFixed(2)}&transaction_uuid=${transactionUuid}`;
+
+  const esewaRes = await fetch(statusUrl);
+  const data = await esewaRes.json();
+
+  if (data.status === 'COMPLETE') {
+    order.isPaid = true;
+    order.paidAt = Date.now();
+    order.paymentResult.id = data.ref_id || transactionUuid;
+    order.paymentResult.status = data.status;
+    order.paymentResult.update_time = new Date().toISOString();
+    order.paymentResult.email_address = req.user?.email || '';
+
+    const updatedOrder = await order.save();
+    res.json(updatedOrder);
+  } else {
+    order.paymentResult.status = data.status || 'FAILED';
+    await order.save();
+    res.status(400).json({ message: `Payment not completed. Status: ${data.status || 'UNKNOWN'}` });
+  }
+};
+
 // @desc  --->  Admin dashboard stats: top-selling products, monthly sales,
 //              and the most frequent customers
 // @route --->  GET /api/orders/stats
@@ -207,5 +301,7 @@ export {
   getMyOrders,
   getOrders,
   updateOrderToDelivered,
+  initiateEsewaPayment,
+  verifyEsewaPayment,
   getOrderStats,
 };

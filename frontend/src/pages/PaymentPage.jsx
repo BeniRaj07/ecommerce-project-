@@ -42,6 +42,17 @@ const PaymentPage = () => {
               />
               <span className="text-sm font-medium text-slate-700">Pay with Card/UPI (Razorpay)</span>
             </label>
+            <label className={`flex items-center gap-3 border rounded-lg p-3 cursor-pointer transition-colors ${paymentMethod === 'eSewa' ? 'border-brand-500 bg-brand-50' : 'border-slate-200'}`}>
+              <input
+                type="radio"
+                name="paymentMethod"
+                value="eSewa"
+                checked={paymentMethod === 'eSewa'}
+                onChange={(e) => setPaymentMethod(e.target.value)}
+                className="text-brand-600 focus:ring-brand-500"
+              />
+              <span className="text-sm font-medium text-slate-700">Pay with eSewa</span>
+            </label>
             <label className={`flex items-center gap-3 border rounded-lg p-3 cursor-pointer transition-colors ${paymentMethod === 'COD' ? 'border-brand-500 bg-brand-50' : 'border-slate-200'}`}>
               <input
                 type="radio"

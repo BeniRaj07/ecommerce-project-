@@ -7,6 +7,8 @@ import {
   getOrders,
   updateOrderToDelivered,
   updateOrderToPaid, //
+  initiateEsewaPayment,
+  verifyEsewaPayment,
   getOrderStats,
 } from '../controllers/orderController.js';
 import { protect, admin } from '../middleware/authMiddleware.js';
@@ -26,7 +28,11 @@ router.route('/stats').get(protect, admin, getOrderStats);
 
 router.route('/:id').get(protect, getOrderById);
 
-router.route('/:id/pay').put(protect, updateOrderToPaid); 
+router.route('/:id/pay').put(protect, updateOrderToPaid);
+
+router.route('/:id/esewa/initiate').post(protect, initiateEsewaPayment);
+
+router.route('/:id/esewa/verify').post(protect, verifyEsewaPayment);
 
 router.route('/:id/deliver').put(protect, admin, updateOrderToDelivered);
 

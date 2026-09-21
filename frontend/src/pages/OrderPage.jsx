@@ -1,17 +1,20 @@
 import React, { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import API from '../api';
 import Loader from '../components/Loader';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements } from '@stripe/react-stripe-js';
 import CheckoutForm from '../components/CheckoutForm';
+import EsewaCheckout from '../components/EsewaCheckout';
+import { toast } from 'react-toastify';
 
 
 const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY);
 
 const OrderPage = () => {
   const { id: orderId } = useParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -36,6 +39,28 @@ const OrderPage = () => {
       fetchOrder();
     }
   }, [orderId, userInfo]);
+
+  useEffect(() => {
+    const esewaStatus = searchParams.get('esewa');
+    if (!esewaStatus || !userInfo) return;
+
+    if (esewaStatus === 'success') {
+      API.post(`/api/orders/${orderId}/esewa/verify`)
+        .then(({ data }) => {
+          setOrder(data);
+          toast.success('Payment Successful!');
+        })
+        .catch((err) => {
+          toast.error(err?.response?.data?.message || err.message);
+        })
+        .finally(() => {
+          setSearchParams({}, { replace: true });
+        });
+    } else if (esewaStatus === 'failure') {
+      toast.error('eSewa payment was not completed.');
+      setSearchParams({}, { replace: true });
+    }
+  }, [searchParams, orderId, userInfo]);
 
   if (loading) return <Loader />;
   if (error) return <p className="text-red-500">{error}</p>;
@@ -96,8 +121,13 @@ const OrderPage = () => {
                 <div className="flex justify-between py-3 font-bold text-base"><span>Total</span><span>Rs {order.totalPrice}/-</span></div>
               </div>
 
-              {/* STRIPE PAYMENT FORM */}
-              {!order.isPaid && order.paymentMethod !== 'COD' && (
+              {!order.isPaid && order.paymentMethod === 'eSewa' && (
+                <div className="mt-4">
+                  <EsewaCheckout order={order} />
+                </div>
+              )}
+
+              {!order.isPaid && order.paymentMethod !== 'COD' && order.paymentMethod !== 'eSewa' && (
                 <div className="mt-4">
                   <Elements stripe={stripePromise}>
                     <CheckoutForm order={order} refetchOrder={fetchOrder} />
