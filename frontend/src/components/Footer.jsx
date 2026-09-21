@@ -30,7 +30,7 @@ const Footer = () => {
         </div>
 
         {/* Links and Socials Section */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-10 py-10">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-10 py-10">
           <div>
             <h3 className="text-white font-bold tracking-wide text-sm mb-4">ABOUT US</h3>
             <p className="text-slate-400 text-sm leading-relaxed">
@@ -62,14 +62,6 @@ const Footer = () => {
                 </li>
               ))}
             </ul>
-          </div>
-          <div>
-            <h3 className="text-white font-bold tracking-wide text-sm mb-4">NEWSLETTER</h3>
-            <p className="text-slate-400 text-sm mb-3">Subscribe for updates and promotions.</p>
-            <form className="flex">
-              <input type="email" placeholder="Your Email" className="p-2.5 rounded-l-lg text-slate-900 text-sm w-full outline-none focus:ring-2 focus:ring-brand-500" />
-              <button type="submit" className="bg-brand-600 hover:bg-brand-700 px-4 rounded-r-lg text-sm font-semibold text-white transition-colors">Subscribe</button>
-            </form>
           </div>
         </div>
 

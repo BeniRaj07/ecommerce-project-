@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useRef } from 'react';
+import { useParams, Link } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import API from '../api';
 import { addToCart } from '../store/slices/cartSlice';
@@ -7,6 +7,50 @@ import Rating from '../components/Rating';
 import Loader from '../components/Loader';
 import { toast } from 'react-toastify';
 import { slugify } from '../data/categories';
+
+// Clones the product image and animates it flying from its on-page position
+// into the header cart icon, giving "Add to Cart" a visible destination
+// instead of silently redirecting the shopper away.
+const flyToCart = (imgEl) => {
+  const cartEl = document.getElementById('cart-icon');
+  if (!imgEl || !cartEl) return;
+
+  const imgRect = imgEl.getBoundingClientRect();
+  const cartRect = cartEl.getBoundingClientRect();
+
+  const clone = imgEl.cloneNode(true);
+  Object.assign(clone.style, {
+    position: 'fixed',
+    top: `${imgRect.top}px`,
+    left: `${imgRect.left}px`,
+    width: `${imgRect.width}px`,
+    height: `${imgRect.height}px`,
+    borderRadius: '1rem',
+    zIndex: 9999,
+    pointerEvents: 'none',
+    transition: 'transform 0.7s cubic-bezier(0.5, -0.3, 0.7, 1.1), opacity 0.7s ease, border-radius 0.7s ease',
+  });
+  document.body.appendChild(clone);
+
+  const deltaX = cartRect.left + cartRect.width / 2 - (imgRect.left + imgRect.width / 2);
+  const deltaY = cartRect.top + cartRect.height / 2 - (imgRect.top + imgRect.height / 2);
+
+  requestAnimationFrame(() => {
+    clone.style.transform = `translate(${deltaX}px, ${deltaY}px) scale(0.08)`;
+    clone.style.opacity = '0.3';
+    clone.style.borderRadius = '50%';
+  });
+
+  clone.addEventListener(
+    'transitionend',
+    () => {
+      clone.remove();
+      cartEl.classList.add('animate-cart-bump');
+      setTimeout(() => cartEl.classList.remove('animate-cart-bump'), 400);
+    },
+    { once: true }
+  );
+};
 
 const ProductPage = () => {
   const [product, setProduct] = useState({ reviews: [] });
@@ -16,10 +60,10 @@ const ProductPage = () => {
   const [loading, setLoading] = useState(true);
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState('');
+  const imgRef = useRef(null);
 
   const { id: productId } = useParams();
   const dispatch = useDispatch();
-  const navigate = useNavigate();
 
   const { userInfo } = useSelector((state) => state.auth);
 
@@ -43,7 +87,8 @@ const ProductPage = () => {
 
   const addToCartHandler = () => {
     dispatch(addToCart({ ...product, qty, selectedSize, selectedColor }));
-    navigate(userInfo ? '/shipping' : '/login?redirect=/shipping');
+    flyToCart(imgRef.current);
+    toast.success(`${product.name} added to cart!`);
   };
 
   const submitHandler = async (e) => {
@@ -79,7 +124,7 @@ const ProductPage = () => {
 
       <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-1">
-          <img src={product.image} alt={product.name} className="w-full rounded-2xl shadow-soft" />
+          <img ref={imgRef} src={product.image} alt={product.name} className="w-full rounded-2xl shadow-soft" />
         </div>
 
         <div className="md:col-span-1 lg:col-span-1">
