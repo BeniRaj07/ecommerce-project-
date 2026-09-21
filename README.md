@@ -14,7 +14,7 @@
 
 ## 📖 Project Overview
 
-**Juttax** is a full-stack MERN marketplace focused entirely on footwear — connecting Nepali shoemakers, cobblers and retailers (in Kathmandu, Lalitpur, Bhaktapur, Pokhara, Biratnagar and beyond) with shoppers looking for everything from everyday sneakers to handmade traditional jutta and made-to-order custom shoes.
+**Juttax** is a full-stack MERN marketplace focused entirely on footwear — connecting Nepali shoemakers and cobblers (in Kathmandu, Lalitpur, and Bhaktapur) with shoppers looking for everything from everyday sneakers to handmade traditional jutta.
 
 Built on the MERN stack, it implements persistent cart state management, role-based authorization, and secure payment simulation via the Stripe API — plus a footwear-specific catalog with sizes, colors, materials, maker/seller info, and Nepal-focused filtering.
 
@@ -24,7 +24,7 @@ Built on the MERN stack, it implements persistent cart state management, role-ba
 * **Authentication & Security:** Secure registration and login using JWT (JSON Web Tokens) and bcryptjs for password hashing.
 * **Full Footwear Category Tree:** Men, Women, Kids, Traditional / Local, and Sports — each with detailed sub-categories.
 * **Rich Filtering:** Filter any listing by price, size, color, material, maker/seller, location, handmade, made in Nepal, ready stock vs. made to order, and rating.
-* **Shop by Maker:** Browse footwear directly by the maker's city — Kathmandu, Lalitpur, Bhaktapur, Pokhara, Biratnagar, or other local sellers.
+* **Shop by Maker:** Browse footwear directly by the maker's city — Kathmandu, Lalitpur, or Bhaktapur.
 * **Featured Local Collections:** Curated views for Made in Nepal, Handmade, New Arrivals, Best Selling, Budget and Premium footwear.
 * **Interactive Shopping Cart:** Persistent cart state managed by Redux Toolkit and LocalStorage.
 * **Secure Checkout:** Multi-step checkout flow handling shipping details and Stripe payment processing.

@@ -11,7 +11,7 @@ import {
 const toggleInList = (list, value) =>
   list.includes(value) ? list.filter((v) => v !== value) : [...list, value];
 
-const FilterSidebar = ({ subCategories = [], hideLocation = false }) => {
+const FilterSidebar = ({ subCategories = [], hideLocation = false, sizeOptions = filterSizes }) => {
   const [searchParams, setSearchParams] = useSearchParams();
 
   const [minPrice, setMinPrice] = useState(searchParams.get('minPrice') || '');
@@ -130,7 +130,7 @@ const FilterSidebar = ({ subCategories = [], hideLocation = false }) => {
       <div>
         <h4 className="font-semibold mb-2 text-sm uppercase text-gray-500">Size</h4>
         <div className="flex flex-wrap gap-2">
-          {filterSizes.map((s) => (
+          {sizeOptions.map((s) => (
             <button
               key={s}
               onClick={() => toggleListParam('size', String(s))}

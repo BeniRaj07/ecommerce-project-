@@ -13,6 +13,9 @@ import {
   locationBySlug,
   collectionBySlug,
   collections,
+  adultSizes,
+  kidsSizes,
+  filterSizes,
 } from '../data/categories';
 
 const HomePage = () => {
@@ -27,6 +30,7 @@ const HomePage = () => {
   const currentCategory = footwearCategories.find((c) => c.slug === categorySlug);
 
   const isListing = Boolean(keyword || categoryName || locationName || collectionData);
+  const sizeOptions = categoryName === 'Kids' ? kidsSizes : categoryName ? adultSizes : filterSizes;
 
   useEffect(() => {
     const fetchProducts = async () => {
@@ -118,6 +122,7 @@ const HomePage = () => {
             <FilterSidebar
               subCategories={currentCategory ? currentCategory.subCategories : []}
               hideLocation={Boolean(locationName)}
+              sizeOptions={sizeOptions}
             />
           )}
 

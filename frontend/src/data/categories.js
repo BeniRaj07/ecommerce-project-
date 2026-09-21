@@ -48,9 +48,6 @@ export const makerLocations = [
   { label: 'Kathmandu Makers', value: 'Kathmandu', slug: 'kathmandu' },
   { label: 'Lalitpur Makers', value: 'Lalitpur', slug: 'lalitpur' },
   { label: 'Bhaktapur Makers', value: 'Bhaktapur', slug: 'bhaktapur' },
-  { label: 'Pokhara Makers', value: 'Pokhara', slug: 'pokhara' },
-  { label: 'Biratnagar Makers', value: 'Biratnagar', slug: 'biratnagar' },
-  { label: 'Other Local Sellers', value: 'Other', slug: 'other' },
 ];
 
 export const locationBySlug = makerLocations.reduce((acc, l) => {
@@ -75,9 +72,9 @@ export const collectionBySlug = collections.reduce((acc, c) => {
 }, {});
 
 // Filter vocab shared by the FilterSidebar
-export const filterSizes = [28, 29, 30, 31, 32, 33, 36, 37, 38, 39, 40, 41, 42, 43, 44];
-export const filterColors = [
-  'Black', 'Brown', 'White', 'Grey', 'Tan', 'Red', 'Blue', 'Pink', 'Maroon', 'Gold', 'Green', 'Navy',
-];
-export const filterMaterials = ['Leather', 'Genuine Leather', 'Suede', 'Canvas', 'Synthetic', 'Rubber', 'Mesh', 'EVA'];
+export const kidsSizes = [28, 29, 30, 31, 32, 33];
+export const adultSizes = [36, 37, 38, 39, 40, 41, 42, 43, 44];
+export const filterSizes = [...kidsSizes, ...adultSizes];
+export const filterColors = ['Black', 'Brown', 'Red', 'Maroon'];
+export const filterMaterials = ['Leather', 'Canvas', 'Rubber', 'Synthetic'];
 export const stockTypes = ['Ready Stock', 'Made to Order'];

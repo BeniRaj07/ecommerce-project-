@@ -19,7 +19,7 @@ const Footer = () => {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8 py-8">
             <div>
                 <h3 className="font-bold mb-4">ABOUT US</h3>
-                <p className="text-gray-400">Juttax connects Nepali footwear makers — from Kathmandu to Biratnagar — with shoppers looking for handmade, custom and everyday footwear.</p>
+                <p className="text-gray-400">Juttax connects Nepali footwear makers — across Kathmandu, Lalitpur and Bhaktapur — with shoppers looking for handmade, traditional and everyday footwear.</p>
                 <div className="flex space-x-4 mt-4">
                     <a href="#" className="hover:text-indigo-400"><FaFacebook size={20}/></a>
                     <a href="#" className="hover:text-indigo-400"><FaTwitter size={20}/></a>

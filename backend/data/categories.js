@@ -25,13 +25,6 @@ export const footwearCategories = [
 export const mainCategoryNames = footwearCategories.map((c) => c.name);
 
 // Shop by Maker locations
-export const makerLocations = [
-  'Kathmandu',
-  'Lalitpur',
-  'Bhaktapur',
-  'Pokhara',
-  'Biratnagar',
-  'Other',
-];
+export const makerLocations = ['Kathmandu', 'Lalitpur', 'Bhaktapur'];
 
 export const stockTypes = ['Ready Stock', 'Made to Order'];
