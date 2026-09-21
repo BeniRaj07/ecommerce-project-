@@ -13,23 +13,19 @@ export const slugify = (str) =>
 export const footwearCategories = [
   {
     name: 'Men',
-    subCategories: ['Formal Shoes', 'Casual Shoes', 'Sneakers', 'Sandals', 'Slippers'],
+    subCategories: ['Formal Shoes', 'Casual Shoes', 'Sandals'],
   },
   {
     name: 'Women',
-    subCategories: ['Flats', 'Sandals', 'Heels', 'Sneakers', 'Slippers'],
+    subCategories: ['Flats', 'Sandals', 'Heels'],
   },
   {
     name: 'Kids',
-    subCategories: ['School Shoes', 'Casual Shoes', 'Sandals', 'Sports Shoes'],
+    subCategories: ['School Shoes', 'Casual Shoes', 'Sandals'],
   },
   {
     name: 'Traditional / Local',
-    subCategories: ['Handmade Shoes', 'Leather Shoes', 'Traditional Jutta', 'Local Sandals'],
-  },
-  {
-    name: 'Sports',
-    subCategories: ['Running Shoes', 'Training Shoes', 'Football Shoes'],
+    subCategories: ['Handmade Shoes', 'Leather Shoes'],
   },
 ].map((c) => ({ ...c, slug: slugify(c.name) }));
 
@@ -52,22 +48,6 @@ export const makerLocations = [
 
 export const locationBySlug = makerLocations.reduce((acc, l) => {
   acc[l.slug] = l.value;
-  return acc;
-}, {});
-
-// "Featured Local Collections" — curated views computed from product flags
-// rather than a literal category.
-export const collections = [
-  { label: 'Made in Nepal', slug: 'made-in-nepal', params: { madeInNepal: 'true' } },
-  { label: 'Handmade', slug: 'handmade', params: { handmade: 'true' } },
-  { label: 'New Arrivals', slug: 'new-arrivals', params: { sort: 'newest' } },
-  { label: 'Best Selling', slug: 'best-selling', params: { sort: 'bestselling' } },
-  { label: 'Budget Collection', slug: 'budget-collection', params: { maxPrice: '2000' } },
-  { label: 'Premium Collection', slug: 'premium-collection', params: { minPrice: '5000' } },
-];
-
-export const collectionBySlug = collections.reduce((acc, c) => {
-  acc[c.slug] = c;
   return acc;
 }, {});
 

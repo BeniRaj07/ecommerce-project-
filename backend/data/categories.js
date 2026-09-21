@@ -2,23 +2,19 @@
 export const footwearCategories = [
   {
     name: 'Men',
-    subCategories: ['Formal Shoes', 'Casual Shoes', 'Sneakers', 'Sandals', 'Slippers'],
+    subCategories: ['Formal Shoes', 'Casual Shoes', 'Sandals'],
   },
   {
     name: 'Women',
-    subCategories: ['Flats', 'Sandals', 'Heels', 'Sneakers', 'Slippers'],
+    subCategories: ['Flats', 'Sandals', 'Heels'],
   },
   {
     name: 'Kids',
-    subCategories: ['School Shoes', 'Casual Shoes', 'Sandals', 'Sports Shoes'],
+    subCategories: ['School Shoes', 'Casual Shoes', 'Sandals'],
   },
   {
     name: 'Traditional / Local',
-    subCategories: ['Handmade Shoes', 'Leather Shoes', 'Traditional Jutta', 'Local Sandals'],
-  },
-  {
-    name: 'Sports',
-    subCategories: ['Running Shoes', 'Training Shoes', 'Football Shoes'],
+    subCategories: ['Handmade Shoes', 'Leather Shoes'],
   },
 ];
 

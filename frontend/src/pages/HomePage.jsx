@@ -11,8 +11,6 @@ import {
   footwearCategories,
   categoryBySlug,
   locationBySlug,
-  collectionBySlug,
-  collections,
   adultSizes,
   kidsSizes,
   filterSizes,
@@ -21,15 +19,14 @@ import {
 const HomePage = () => {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
-  const { keyword, category: categorySlug, location: locationSlug, collection: collectionSlug } = useParams();
+  const { keyword, category: categorySlug, location: locationSlug } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
 
   const categoryName = categorySlug ? categoryBySlug[categorySlug] : undefined;
   const locationName = locationSlug ? locationBySlug[locationSlug] : undefined;
-  const collectionData = collectionSlug ? collectionBySlug[collectionSlug] : undefined;
   const currentCategory = footwearCategories.find((c) => c.slug === categorySlug);
 
-  const isListing = Boolean(keyword || categoryName || locationName || collectionData);
+  const isListing = Boolean(keyword || categoryName || locationName);
   const sizeOptions = categoryName === 'Kids' ? kidsSizes : categoryName ? adultSizes : filterSizes;
 
   useEffect(() => {
@@ -37,7 +34,6 @@ const HomePage = () => {
       setLoading(true);
       try {
         const apiParams = {
-          ...(collectionData?.params || {}),
           ...Object.fromEntries(searchParams.entries()),
         };
         if (keyword) apiParams.keyword = keyword;
@@ -54,11 +50,10 @@ const HomePage = () => {
     };
     fetchProducts();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [keyword, categorySlug, locationSlug, collectionSlug, searchParams.toString()]);
+  }, [keyword, categorySlug, locationSlug, searchParams.toString()]);
 
   let title = 'Latest Footwear';
   if (keyword) title = `Search Results for "${keyword}"`;
-  else if (collectionData) title = collectionData.label;
   else if (locationName) title = `${locationName} Makers`;
   else if (categoryName) {
     const sub = searchParams.get('sub');
@@ -79,22 +74,6 @@ const HomePage = () => {
           <ProductCarousel />
           <FeaturedCategories />
           <ShopByMaker />
-          <section className="py-14 bg-white border-t border-slate-100">
-            <div className="container mx-auto px-4">
-              <h2 className="text-2xl font-bold text-center text-slate-900 mb-8">Featured Local Collections</h2>
-              <div className="flex flex-wrap justify-center gap-3">
-                {collections.map((c) => (
-                  <Link
-                    key={c.slug}
-                    to={`/collections/${c.slug}`}
-                    className="bg-slate-100 hover:bg-brand-600 text-slate-700 hover:text-white font-semibold text-sm py-2.5 px-5 rounded-full transition-colors"
-                  >
-                    {c.label}
-                  </Link>
-                ))}
-              </div>
-            </div>
-          </section>
         </>
       ) : (
         <Link to='/' className='inline-flex items-center mb-6 bg-white hover:bg-slate-50 text-slate-700 font-semibold py-2 px-4 rounded-lg shadow-soft text-sm transition-colors'>

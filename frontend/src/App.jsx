@@ -11,7 +11,7 @@ import CategoryNav from './components/CategoryNav';
 
 // Routes that render the customer storefront listing (HomePage) — admins
 // are routed to /admin/dashboard instead of browsing these.
-const STOREFRONT_PREFIXES = ['/search/', '/category/', '/makers/', '/collections/'];
+const STOREFRONT_PREFIXES = ['/search/', '/category/', '/makers/'];
 
 // Login/register pages get a bare, distraction-free layout — no promo bar,
 // category nav or footer, just the auth card itself.

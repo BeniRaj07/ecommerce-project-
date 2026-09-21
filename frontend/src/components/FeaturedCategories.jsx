@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { FaMale, FaFemale, FaChild, FaPaintBrush, FaBolt } from 'react-icons/fa';
+import { FaMale, FaFemale, FaChild, FaPaintBrush } from 'react-icons/fa';
 import { topNav } from '../data/categories';
 
 const icons = {
@@ -8,7 +8,6 @@ const icons = {
   Women: FaFemale,
   Kids: FaChild,
   'Traditional / Local': FaPaintBrush,
-  Sports: FaBolt,
 };
 
 const FeaturedCategories = () => {

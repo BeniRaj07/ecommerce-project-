@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { FaBars } from 'react-icons/fa';
-import { footwearCategories, topNav, collections } from '../data/categories';
+import { footwearCategories, topNav } from '../data/categories';
 
 const CategoryNav = () => {
   const [isMegaOpen, setIsMegaOpen] = useState(false);
@@ -21,7 +21,7 @@ const CategoryNav = () => {
             </button>
 
             {isMegaOpen && (
-              <div className="absolute left-0 top-full z-20 bg-white shadow-card border border-slate-100 rounded-b-xl w-[720px] max-w-[90vw] grid grid-cols-3 gap-x-6 gap-y-5 p-6">
+              <div className="absolute left-0 top-full z-20 bg-white shadow-card border border-slate-100 rounded-b-xl w-[720px] max-w-[90vw] grid grid-cols-4 gap-x-6 gap-y-5 p-6">
                 {footwearCategories.map((cat) => (
                   <div key={cat.slug}>
                     <Link
@@ -44,18 +44,6 @@ const CategoryNav = () => {
                     </ul>
                   </div>
                 ))}
-                <div>
-                  <span className="block font-bold text-sm text-slate-900 mb-2">Featured Local Collections</span>
-                  <ul className="space-y-1.5">
-                    {collections.map((c) => (
-                      <li key={c.slug}>
-                        <Link to={`/collections/${c.slug}`} className="text-sm text-slate-500 hover:text-brand-600 transition-colors">
-                          {c.label}
-                        </Link>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
               </div>
             )}
           </div>
