@@ -35,17 +35,6 @@ const PaymentPage = () => {
         <form onSubmit={submitHandler} className="bg-white shadow-soft rounded-2xl p-6">
           <label className="block text-slate-600 text-sm font-semibold mb-3">Select Method</label>
           <div className="space-y-2.5">
-            <label className={`flex items-center gap-3 border rounded-lg p-3 cursor-pointer transition-colors ${paymentMethod === 'Razorpay' ? 'border-brand-500 bg-brand-50' : 'border-slate-200'}`}>
-              <input
-                type="radio"
-                name="paymentMethod"
-                value="Razorpay"
-                checked={paymentMethod === 'Razorpay'}
-                onChange={(e) => setPaymentMethod(e.target.value)}
-                className="text-brand-600 focus:ring-brand-500"
-              />
-              <span className="text-sm font-medium text-slate-700">Pay with Card/UPI (Razorpay)</span>
-            </label>
             <label className={`flex items-center gap-3 border rounded-lg p-3 cursor-pointer transition-colors ${paymentMethod === 'eSewa' ? 'border-brand-500 bg-brand-50' : 'border-slate-200'}`}>
               <input
                 type="radio"
