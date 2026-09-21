@@ -4,6 +4,7 @@ import { useSelector } from 'react-redux';
 import API from '../../api';
 import { toast } from 'react-toastify';
 import Loader from '../../components/Loader';
+import AdminLayout from '../../components/AdminLayout';
 import { FaEdit, FaTrash, FaPlus } from 'react-icons/fa';
 
 const ProductListPage = () => {
@@ -51,14 +52,14 @@ const ProductListPage = () => {
     }
   };
 
+  const createButton = (
+    <button onClick={createProductHandler} className="bg-gray-800 text-white py-2 px-4 rounded hover:bg-gray-700 flex items-center text-sm">
+      <FaPlus className="mr-2" /> Create Product
+    </button>
+  );
+
   return (
-    <div>
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold">Products</h1>
-        <button onClick={createProductHandler} className="bg-gray-800 text-white py-2 px-4 rounded hover:bg-gray-700 flex items-center">
-          <FaPlus className="mr-2" /> Create Product
-        </button>
-      </div>
+    <AdminLayout title="Products" actions={createButton}>
       {loading ? <Loader /> : (
         <div className="overflow-x-auto">
           <table className="min-w-full bg-white">
@@ -96,7 +97,7 @@ const ProductListPage = () => {
           </table>
         </div>
       )}
-    </div>
+    </AdminLayout>
   );
 };
 

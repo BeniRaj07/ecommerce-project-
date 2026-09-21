@@ -4,6 +4,7 @@ import { useSelector } from 'react-redux';
 import API from '../../api';
 import { toast } from 'react-toastify';
 import Loader from '../../components/Loader';
+import AdminLayout from '../../components/AdminLayout';
 import { FaCheck, FaTimes, FaTrash } from 'react-icons/fa';
 
 const UserListPage = () => {
@@ -39,8 +40,7 @@ const UserListPage = () => {
   };
 
   return (
-    <div>
-      <h1 className="text-3xl font-bold mb-6">Users</h1>
+    <AdminLayout title="Users">
       {loading ? <Loader /> : (
         <div className="overflow-x-auto">
           <table className="min-w-full bg-white">
@@ -77,7 +77,7 @@ const UserListPage = () => {
           </table>
         </div>
       )}
-    </div>
+    </AdminLayout>
   );
 };
 

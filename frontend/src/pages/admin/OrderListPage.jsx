@@ -4,6 +4,7 @@ import { useSelector } from 'react-redux';
 import API from '../../api';
 import { toast } from 'react-toastify';
 import Loader from '../../components/Loader';
+import AdminLayout from '../../components/AdminLayout';
 import { FaTimes } from 'react-icons/fa';
 
 const OrderListPage = () => {
@@ -41,8 +42,7 @@ const OrderListPage = () => {
   };
 
   return (
-    <div>
-      <h1 className="text-3xl font-bold mb-6">Orders</h1>
+    <AdminLayout title="Orders">
       {loading ? <Loader /> : (
         <div className="overflow-x-auto">
           <table className="min-w-full bg-white">
@@ -93,7 +93,7 @@ const OrderListPage = () => {
           </table>
         </div>
       )}
-    </div>
+    </AdminLayout>
   );
 };
 

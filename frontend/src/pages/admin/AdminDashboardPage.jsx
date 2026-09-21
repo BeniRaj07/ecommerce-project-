@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
 import API from '../../api';
 import { toast } from 'react-toastify';
 import Loader from '../../components/Loader';
+import AdminLayout from '../../components/AdminLayout';
 import {
   ResponsiveContainer,
   BarChart,
@@ -92,16 +92,7 @@ const AdminDashboardPage = () => {
   }));
 
   return (
-    <div>
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold">Admin Dashboard</h1>
-        <div className="flex gap-3">
-          <Link to="/admin/productlist" className="bg-gray-200 hover:bg-gray-300 text-black font-semibold py-2 px-4 rounded text-sm">Products</Link>
-          <Link to="/admin/orderlist" className="bg-gray-200 hover:bg-gray-300 text-black font-semibold py-2 px-4 rounded text-sm">Orders</Link>
-          <Link to="/admin/userlist" className="bg-gray-200 hover:bg-gray-300 text-black font-semibold py-2 px-4 rounded text-sm">Users</Link>
-        </div>
-      </div>
-
+    <AdminLayout title="Admin Dashboard">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
         <StatTile label="Total Revenue" value={currency(totals.totalRevenue)} />
         <StatTile label="Total Orders" value={totals.totalOrders} />
@@ -200,7 +191,7 @@ const AdminDashboardPage = () => {
           </div>
         )}
       </div>
-    </div>
+    </AdminLayout>
   );
 };
 
