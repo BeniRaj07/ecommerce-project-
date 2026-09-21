@@ -1,17 +1,14 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { FaMale, FaFemale, FaChild, FaStar, FaPaintBrush, FaCogs, FaBolt, FaGraduationCap } from 'react-icons/fa';
+import { FaMale, FaFemale, FaChild, FaPaintBrush, FaBolt } from 'react-icons/fa';
 import { topNav } from '../data/categories';
 
 const icons = {
   Men: FaMale,
   Women: FaFemale,
   Kids: FaChild,
-  Traditional: FaStar,
-  Handmade: FaPaintBrush,
-  'Custom Made': FaCogs,
+  'Traditional / Local': FaPaintBrush,
   Sports: FaBolt,
-  School: FaGraduationCap,
 };
 
 const FeaturedCategories = () => {

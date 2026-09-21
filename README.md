@@ -22,7 +22,7 @@ Built on the MERN stack, it implements persistent cart state management, role-ba
 
 ### For Shoppers
 * **Authentication & Security:** Secure registration and login using JWT (JSON Web Tokens) and bcryptjs for password hashing.
-* **Full Footwear Category Tree:** Men, Women, Kids, Traditional & Handmade, Custom Made, Local Leather Collection, Sports & Outdoor, School & Uniform, and Work & Utility — each with detailed sub-categories.
+* **Full Footwear Category Tree:** Men, Women, Kids, Traditional / Local, and Sports — each with detailed sub-categories.
 * **Rich Filtering:** Filter any listing by price, size, color, material, maker/seller, location, handmade, made in Nepal, ready stock vs. made to order, and rating.
 * **Shop by Maker:** Browse footwear directly by the maker's city — Kathmandu, Lalitpur, Bhaktapur, Pokhara, Biratnagar, or other local sellers.
 * **Featured Local Collections:** Curated views for Made in Nepal, Handmade, New Arrivals, Best Selling, Budget and Premium footwear.
