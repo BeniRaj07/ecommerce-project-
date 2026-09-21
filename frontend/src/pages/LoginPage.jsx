@@ -19,7 +19,7 @@ const LoginPage = () => {
 
   useEffect(() => {
     if (userInfo) {
-      navigate(redirect);
+      navigate(userInfo.isAdmin ? '/admin/dashboard' : redirect);
     }
   }, [userInfo, redirect, navigate]);
 
@@ -29,7 +29,7 @@ const LoginPage = () => {
     try {
       const { data } = await API.post('/api/users/login', { email, password });
       dispatch(setCredentials(data));
-      navigate(redirect);
+      navigate(data.isAdmin ? '/admin/dashboard' : redirect);
     } catch (error) {
       toast.error(error?.response?.data?.message || error.message);
     } finally {

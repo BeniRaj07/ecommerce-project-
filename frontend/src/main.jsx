@@ -26,7 +26,8 @@ import ProfilePage from './pages/ProfilePage.jsx';
 import UserListPage from './pages/admin/UserListPage.jsx';
 import ProductListPage from './pages/admin/ProductListPage.jsx'; 
 import ProductEditPage from './pages/admin/ProductEditPage.jsx'; 
-import OrderListPage from './pages/admin/OrderListPage.jsx'; 
+import OrderListPage from './pages/admin/OrderListPage.jsx';
+import AdminDashboardPage from './pages/admin/AdminDashboardPage.jsx';
 
 import './index.css';
 
@@ -55,6 +56,7 @@ const router = createBrowserRouter(
 
       {/*  Private Admin Routes  */}
       <Route path="" element={<AdminRoute />}>
+        <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
         <Route path="/admin/userlist" element={<UserListPage />} />
         <Route path="/admin/productlist" element={<ProductListPage />} />
         <Route path="/admin/orderlist" element={<OrderListPage />} />

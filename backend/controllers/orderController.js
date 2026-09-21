@@ -1,4 +1,6 @@
 import Order from '../models/orderModel.js';
+import Product from '../models/productModel.js';
+import User from '../models/userModel.js';
 
 // @desc   ---> this  Creates new order
 // @route   ---> this POST /api/orders
@@ -114,6 +116,89 @@ const updateOrderToDelivered = async (req, res) => {
   }
 };
 
+// @desc  --->  Admin dashboard stats: top-selling products, monthly sales,
+//              and the most frequent customers
+// @route --->  GET /api/orders/stats
+// @access  Private/Admin
+const getOrderStats = async (req, res) => {
+  const [topProducts, monthlySales, topCustomers, totals] = await Promise.all([
+    Order.aggregate([
+      { $unwind: '$orderItems' },
+      {
+        $group: {
+          _id: '$orderItems.product',
+          name: { $first: '$orderItems.name' },
+          qtySold: { $sum: '$orderItems.qty' },
+          revenue: { $sum: { $multiply: ['$orderItems.qty', '$orderItems.price'] } },
+        },
+      },
+      { $sort: { qtySold: -1 } },
+      { $limit: 8 },
+    ]),
+    Order.aggregate([
+      {
+        $group: {
+          _id: { year: { $year: '$createdAt' }, month: { $month: '$createdAt' } },
+          revenue: { $sum: '$totalPrice' },
+          orders: { $sum: 1 },
+        },
+      },
+      { $sort: { '_id.year': 1, '_id.month': 1 } },
+      { $limit: 12 },
+    ]),
+    Order.aggregate([
+      {
+        $group: {
+          _id: '$user',
+          orderCount: { $sum: 1 },
+          totalSpent: { $sum: '$totalPrice' },
+        },
+      },
+      { $sort: { orderCount: -1, totalSpent: -1 } },
+      { $limit: 10 },
+      {
+        $lookup: {
+          from: User.collection.name,
+          localField: '_id',
+          foreignField: '_id',
+          as: 'userInfo',
+        },
+      },
+      { $unwind: '$userInfo' },
+      {
+        $project: {
+          _id: 0,
+          userId: '$_id',
+          name: '$userInfo.name',
+          email: '$userInfo.email',
+          orderCount: 1,
+          totalSpent: 1,
+        },
+      },
+    ]),
+    Promise.all([
+      Order.countDocuments(),
+      Order.aggregate([{ $group: { _id: null, revenue: { $sum: '$totalPrice' } } }]),
+      User.countDocuments(),
+      Product.countDocuments(),
+    ]),
+  ]);
+
+  const [totalOrders, revenueAgg, totalUsers, totalProducts] = totals;
+
+  res.json({
+    topProducts,
+    monthlySales,
+    topCustomers,
+    totals: {
+      totalOrders,
+      totalRevenue: revenueAgg[0]?.revenue || 0,
+      totalUsers,
+      totalProducts,
+    },
+  });
+};
+
 //The export includes all functions
 export {
   addOrderItems,
@@ -122,4 +207,5 @@ export {
   getMyOrders,
   getOrders,
   updateOrderToDelivered,
+  getOrderStats,
 };

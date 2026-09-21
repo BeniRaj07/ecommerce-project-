@@ -71,6 +71,7 @@ const Header = () => {
                     </button>
                     {isAdminMenuOpen && (
                       <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-10 text-black border">
+                        <Link to="/admin/dashboard" onClick={() => setIsAdminMenuOpen(false)} className="block px-4 py-2 text-sm hover:bg-gray-100">Dashboard</Link>
                         <Link to="/admin/userlist" onClick={() => setIsAdminMenuOpen(false)} className="block px-4 py-2 text-sm hover:bg-gray-100">Users</Link>
                         <Link to="/admin/productlist" onClick={() => setIsAdminMenuOpen(false)} className="block px-4 py-2 text-sm hover:bg-gray-100">Products</Link>
                         <Link to="/admin/orderlist" onClick={() => setIsAdminMenuOpen(false)} className="block px-4 py-2 text-sm hover:bg-gray-100">Orders</Link>
