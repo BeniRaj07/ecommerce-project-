@@ -3,7 +3,16 @@ import API from '../../api';
 import { toast } from 'react-toastify';
 import Loader from '../../components/Loader';
 import AdminLayout from '../../components/AdminLayout';
-import { FaMoneyBillWave, FaClipboardList, FaUsers, FaBoxOpen } from 'react-icons/fa';
+import {
+  FaMoneyBillWave,
+  FaClipboardList,
+  FaUsers,
+  FaBoxOpen,
+  FaTruck,
+  FaHourglassHalf,
+  FaBan,
+  FaUndo,
+} from 'react-icons/fa';
 import {
   ResponsiveContainer,
   BarChart,
@@ -36,6 +45,8 @@ const STAT_ACCENTS = {
   emerald: 'bg-emerald-50 text-emerald-600',
   amber: 'bg-amber-50 text-amber-600',
   sky: 'bg-sky-50 text-sky-600',
+  red: 'bg-red-50 text-red-600',
+  slate: 'bg-slate-100 text-slate-600',
 };
 
 const StatTile = (props) => {
@@ -109,11 +120,31 @@ const AdminDashboardPage = () => {
 
   return (
     <AdminLayout title="Admin Dashboard">
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
         <StatTile label="Total Revenue" value={currency(totals.totalRevenue)} icon={FaMoneyBillWave} accent="emerald" />
         <StatTile label="Total Orders" value={totals.totalOrders} icon={FaClipboardList} accent="indigo" />
         <StatTile label="Total Users" value={totals.totalUsers} icon={FaUsers} accent="sky" />
         <StatTile label="Total Products" value={totals.totalProducts} icon={FaBoxOpen} accent="amber" />
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+        <StatTile label="Delivered Orders" value={totals.deliveredOrders} icon={FaTruck} accent="emerald" />
+        <StatTile label="Pending Revenue" value={currency(totals.pendingRevenue)} icon={FaHourglassHalf} accent="amber" />
+        <StatTile label="Cancellation Requests" value={totals.cancellationRequestsCount} icon={FaBan} accent="red" />
+        <StatTile label="Return Requests" value={totals.returnRequestsCount} icon={FaUndo} accent="red" />
+      </div>
+
+      <div className="grid grid-cols-2 gap-4 mb-8 max-w-xl">
+        <div className="bg-white rounded-2xl shadow-soft p-5">
+          <p className="text-xs uppercase tracking-wide text-slate-400 font-semibold">Cancelled</p>
+          <p className="text-xl font-bold mt-1 text-slate-900">{totals.cancelledOrders} orders</p>
+          <p className="text-sm text-slate-500 mt-0.5">{currency(totals.cancelledAmount)}</p>
+        </div>
+        <div className="bg-white rounded-2xl shadow-soft p-5">
+          <p className="text-xs uppercase tracking-wide text-slate-400 font-semibold">Returned / Refunded</p>
+          <p className="text-xl font-bold mt-1 text-slate-900">{totals.returnedOrders} orders</p>
+          <p className="text-sm text-slate-500 mt-0.5">{currency(totals.refundedAmount)}</p>
+        </div>
       </div>
 
       <div className="grid md:grid-cols-2 gap-6 mb-6">

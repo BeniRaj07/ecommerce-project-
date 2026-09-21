@@ -13,7 +13,7 @@ import OrderStatusTimeline from '../components/OrderStatusTimeline';
 import RequestReasonModal from '../components/RequestReasonModal';
 import ReviewModal from '../components/ReviewModal';
 import { clearCartItems } from '../store/slices/cartSlice';
-import { CANCEL_REASONS, RETURN_REASONS, canRequestCancellation, canRequestReturn } from '../data/orderStatus';
+import { CANCEL_REASONS, RETURN_REASONS, canRequestCancellation, canRequestReturn, PAYMENT_STATUS_META } from '../data/orderStatus';
 import { toast } from 'react-toastify';
 import { FaCheck } from 'react-icons/fa';
 
@@ -183,7 +183,9 @@ const OrderPage = () => {
                 <p className="mt-3 text-sm text-blue-700 bg-blue-50 rounded-lg p-3">Return approved — please ship the item back to the maker.</p>
               )}
               {order.orderStatus === 'return_rejected' && (
-                <p className="mt-3 text-sm text-red-600 bg-red-50 rounded-lg p-3">Return request was rejected.</p>
+                <p className="mt-3 text-sm text-red-600 bg-red-50 rounded-lg p-3">
+                  Return request was rejected.{order.returnRequest?.adminNote ? ` ${order.returnRequest.adminNote}` : ''}
+                </p>
               )}
               {order.orderStatus === 'returned' && (
                 <p className="mt-3 text-sm text-slate-600 bg-slate-50 rounded-lg p-3">Item returned.</p>
@@ -208,11 +210,14 @@ const OrderPage = () => {
             <div className="bg-white rounded-2xl shadow-soft p-5">
               <h2 className="text-lg font-bold text-slate-900 mb-3">Payment Method</h2>
               <p className="text-sm text-slate-600"><strong className="text-slate-800">Method: </strong>{order.paymentMethod}</p>
-              {order.isPaid ? (
-                <div className="mt-3 inline-block px-3 py-1.5 bg-emerald-50 text-emerald-700 text-sm font-semibold rounded-full">Paid on {new Date(order.paidAt).toLocaleDateString()}</div>
-              ) : (
-                <div className="mt-3 inline-block px-3 py-1.5 bg-red-50 text-red-600 text-sm font-semibold rounded-full">Not Paid</div>
-              )}
+              {(() => {
+                const meta = PAYMENT_STATUS_META[order.paymentStatus] || PAYMENT_STATUS_META.pending;
+                return (
+                  <div className={`mt-3 inline-block px-3 py-1.5 text-sm font-semibold rounded-full ${meta.color}`}>
+                    {meta.label}{order.paymentStatus === 'paid' && order.paidAt ? ` on ${new Date(order.paidAt).toLocaleDateString()}` : ''}
+                  </div>
+                );
+              })()}
             </div>
 
             <div className="bg-white rounded-2xl shadow-soft p-5">

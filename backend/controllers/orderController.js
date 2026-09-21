@@ -3,42 +3,105 @@ import Order from '../models/orderModel.js';
 import Product from '../models/productModel.js';
 import User from '../models/userModel.js';
 import { ESEWA_CONFIG } from '../config/esewa.js';
+import { calculateRevenueStats } from '../utils/revenueStats.js';
+
+// GST rate applied to every order — matches the checkout page's own display
+// calculation, kept as the single source of truth here since the backend
+// is what actually persists the charged amount.
+const TAX_RATE = 0.18;
 
 // @desc   ---> this  Creates new order
 // @route   ---> this POST /api/orders
 // @access  Private
 const addOrderItems = async (req, res) => {
-  const {
-    orderItems,
-    shippingAddress,
-    paymentMethod,
-    itemsPrice,
-    taxPrice,
-    shippingPrice,
-    totalPrice,
-  } = req.body;
+  const { orderItems, shippingAddress, paymentMethod } = req.body;
 
-  if (orderItems && orderItems.length === 0) {
+  if (!orderItems || orderItems.length === 0) {
     res.status(400).json({ message: 'No order items' });
     return;
-  } else {
-    const order = new Order({
-      orderItems: orderItems.map((x) => ({
-        ...x,
-        product: x._id,
-        _id: undefined,
-      })),
-      user: req.user._id,
-      shippingAddress,
-      paymentMethod,
-      itemsPrice,
-      taxPrice,
-      shippingPrice,
-      totalPrice,
-    });
+  }
 
+  // Never trust price/name/image/totals sent by the client — look up the
+  // real product records and recompute everything server-side.
+  const productIds = orderItems.map((item) => item._id || item.product);
+  const products = await Product.find({ _id: { $in: productIds } });
+  const productById = new Map(products.map((p) => [p._id.toString(), p]));
+
+  const resolvedItems = [];
+  for (const item of orderItems) {
+    const productId = item._id || item.product;
+    const product = productById.get(String(productId));
+
+    if (!product) {
+      res.status(404).json({ message: `Product not found: ${productId}` });
+      return;
+    }
+
+    const qty = Number(item.qty) || 0;
+    if (qty <= 0) {
+      res.status(400).json({ message: `Invalid quantity for "${product.name}"` });
+      return;
+    }
+    if (qty > product.countInStock) {
+      res.status(400).json({ message: `Only ${product.countInStock} of "${product.name}" left in stock.` });
+      return;
+    }
+
+    resolvedItems.push({
+      name: product.name,
+      image: product.image,
+      price: product.price,
+      qty,
+      product: product._id,
+      selectedSize: item.selectedSize,
+      selectedColor: item.selectedColor,
+    });
+  }
+
+  // Reserve stock atomically per item (conditional on enough being left at
+  // write time, not just at the read above) so two concurrent orders can't
+  // oversell the same item; roll back whatever was already reserved if a
+  // later item runs out or the order itself fails to save.
+  const reserved = [];
+  const releaseReserved = () =>
+    Promise.all(reserved.map((r) => Product.updateOne({ _id: r.product }, { $inc: { countInStock: r.qty } })));
+
+  for (const item of resolvedItems) {
+    const updated = await Product.findOneAndUpdate(
+      { _id: item.product, countInStock: { $gte: item.qty } },
+      { $inc: { countInStock: -item.qty } }
+    );
+    if (!updated) {
+      await releaseReserved();
+      res.status(400).json({ message: `Not enough stock left for "${item.name}".` });
+      return;
+    }
+    reserved.push(item);
+  }
+
+  const itemsPrice = resolvedItems.reduce((acc, item) => acc + item.price * item.qty, 0);
+  const taxPrice = itemsPrice * TAX_RATE;
+  const shippingPrice = 0;
+  const totalPrice = itemsPrice + taxPrice + shippingPrice;
+
+  const order = new Order({
+    orderItems: resolvedItems,
+    user: req.user._id,
+    shippingAddress,
+    paymentMethod,
+    itemsPrice: itemsPrice.toFixed(2),
+    taxPrice: taxPrice.toFixed(2),
+    shippingPrice: shippingPrice.toFixed(2),
+    totalPrice: totalPrice.toFixed(2),
+    statusHistory: [{ status: 'pending', changedAt: new Date() }],
+  });
+
+  try {
     const createdOrder = await order.save();
     res.status(201).json(createdOrder);
+  } catch (err) {
+    await releaseReserved();
+    throw err;
   }
 };
 
@@ -67,6 +130,7 @@ const updateOrderToPaid = async (req, res) => {
   if (order) {
     order.isPaid = true;
     order.paidAt = Date.now();
+    order.paymentStatus = 'paid';
     order.paymentResult = {
       id: req.body.id,
       status: req.body.status,
@@ -111,6 +175,12 @@ const updateOrderToDelivered = async (req, res) => {
     order.isDelivered = true;
     order.deliveredAt = Date.now();
     order.orderStatus = 'delivered';
+    if (order.paymentMethod === 'COD') {
+      order.isPaid = true;
+      order.paidAt = order.paidAt || Date.now();
+      order.paymentStatus = 'paid';
+    }
+    order.statusHistory.push({ status: 'delivered', changedAt: new Date() });
 
     const updatedOrder = await order.save();
     res.status(200).json(updatedOrder);
@@ -156,7 +226,16 @@ const updateOrderStatus = async (req, res) => {
   if (status === 'delivered') {
     order.isDelivered = true;
     order.deliveredAt = Date.now();
+    // COD has no separate payment step — the money only actually changes
+    // hands once delivery is confirmed. Online payments are already 'paid'
+    // well before this point.
+    if (order.paymentMethod === 'COD') {
+      order.isPaid = true;
+      order.paidAt = order.paidAt || Date.now();
+      order.paymentStatus = 'paid';
+    }
   }
+  order.statusHistory.push({ status, changedAt: new Date() });
 
   const updatedOrder = await order.save();
   res.json(updatedOrder);
@@ -169,7 +248,7 @@ const CANCELLABLE_STATUSES = ['pending', 'to_ship'];
 // @route --->  PUT /api/orders/:id/cancel-request
 // @access  Private
 const requestCancellation = async (req, res) => {
-  const { reason } = req.body;
+  const { reason, details } = req.body;
   const order = await Order.findById(req.params.id);
 
   if (!order) {
@@ -179,6 +258,11 @@ const requestCancellation = async (req, res) => {
 
   if (order.user.toString() !== req.user._id.toString()) {
     res.status(403).json({ message: 'Not authorized to modify this order' });
+    return;
+  }
+
+  if (order.cancelRequest?.status === 'requested') {
+    res.status(400).json({ message: 'A cancellation request is already pending for this order.' });
     return;
   }
 
@@ -196,11 +280,14 @@ const requestCancellation = async (req, res) => {
 
   order.cancelRequest = {
     requested: true,
+    status: 'requested',
     reason,
+    details: details || '',
     requestedAt: Date.now(),
     previousStatus: order.orderStatus,
   };
   order.orderStatus = 'cancel_requested';
+  order.statusHistory.push({ status: 'cancel_requested', changedAt: new Date(), note: reason });
 
   const updatedOrder = await order.save();
   res.json(updatedOrder);
@@ -222,9 +309,27 @@ const approveCancellation = async (req, res) => {
     return;
   }
 
+  // The order never shipped, so whatever it reserved goes back on the shelf.
+  await Promise.all(
+    order.orderItems.map((item) =>
+      Product.updateOne({ _id: item.product }, { $inc: { countInStock: item.qty } })
+    )
+  );
+
   order.orderStatus = 'cancelled';
   order.cancelledAt = Date.now();
+  order.cancelRequest.status = 'approved';
   order.cancelRequest.approvedAt = Date.now();
+
+  // No live payment gateway to call out to here — a paid order's refund is
+  // recorded as completed immediately; an unpaid (COD, not yet delivered)
+  // order never took money in the first place, so no refund is needed.
+  if (order.paymentStatus === 'paid') {
+    order.paymentStatus = 'refunded';
+    order.refundStatus = 'completed';
+  }
+
+  order.statusHistory.push({ status: 'cancelled', changedAt: new Date() });
 
   const updatedOrder = await order.save();
   res.json(updatedOrder);
@@ -235,6 +340,7 @@ const approveCancellation = async (req, res) => {
 // @route --->  PUT /api/orders/:id/cancel/reject
 // @access  Private/Admin
 const rejectCancellation = async (req, res) => {
+  const { adminNote } = req.body;
   const order = await Order.findById(req.params.id);
 
   if (!order) {
@@ -248,8 +354,11 @@ const rejectCancellation = async (req, res) => {
   }
 
   order.orderStatus = order.cancelRequest.previousStatus || 'pending';
+  order.cancelRequest.status = 'rejected';
   order.cancelRequest.rejectedAt = Date.now();
   order.cancelRequest.requested = false;
+  if (adminNote) order.cancelRequest.adminNote = adminNote;
+  order.statusHistory.push({ status: order.orderStatus, changedAt: new Date(), note: 'Cancellation request rejected' });
 
   const updatedOrder = await order.save();
   res.json(updatedOrder);
@@ -272,6 +381,11 @@ const requestReturn = async (req, res) => {
     return;
   }
 
+  if (order.returnRequest?.status === 'requested') {
+    res.status(400).json({ message: 'A return request is already pending for this order.' });
+    return;
+  }
+
   if (order.orderStatus !== 'delivered') {
     res.status(400).json({ message: 'Returns can only be requested for delivered orders.' });
     return;
@@ -284,11 +398,13 @@ const requestReturn = async (req, res) => {
 
   order.returnRequest = {
     requested: true,
+    status: 'requested',
     reason,
     details: details || '',
     requestedAt: Date.now(),
   };
   order.orderStatus = 'return_requested';
+  order.statusHistory.push({ status: 'return_requested', changedAt: new Date(), note: reason });
 
   const updatedOrder = await order.save();
   res.json(updatedOrder);
@@ -311,7 +427,9 @@ const approveReturn = async (req, res) => {
   }
 
   order.orderStatus = 'return_approved';
+  order.returnRequest.status = 'approved';
   order.returnRequest.approvedAt = Date.now();
+  order.statusHistory.push({ status: 'return_approved', changedAt: new Date() });
 
   const updatedOrder = await order.save();
   res.json(updatedOrder);
@@ -321,6 +439,7 @@ const approveReturn = async (req, res) => {
 // @route --->  PUT /api/orders/:id/return/reject
 // @access  Private/Admin
 const rejectReturn = async (req, res) => {
+  const { adminNote } = req.body;
   const order = await Order.findById(req.params.id);
 
   if (!order) {
@@ -334,8 +453,11 @@ const rejectReturn = async (req, res) => {
   }
 
   order.orderStatus = 'return_rejected';
+  order.returnRequest.status = 'rejected';
   order.returnRequest.rejectedAt = Date.now();
   order.returnRequest.requested = false;
+  if (adminNote) order.returnRequest.adminNote = adminNote;
+  order.statusHistory.push({ status: 'return_rejected', changedAt: new Date() });
 
   const updatedOrder = await order.save();
   res.json(updatedOrder);
@@ -345,6 +467,7 @@ const rejectReturn = async (req, res) => {
 // @route --->  PUT /api/orders/:id/return/complete
 // @access  Private/Admin
 const markReturned = async (req, res) => {
+  const { restock } = req.body;
   const order = await Order.findById(req.params.id);
 
   if (!order) {
@@ -357,8 +480,27 @@ const markReturned = async (req, res) => {
     return;
   }
 
+  // Restocking is the admin's call, not automatic — a returned item may be
+  // damaged and not resellable.
+  if (restock) {
+    await Promise.all(
+      order.orderItems.map((item) =>
+        Product.updateOne({ _id: item.product }, { $inc: { countInStock: item.qty } })
+      )
+    );
+  }
+
   order.orderStatus = 'returned';
   order.returnedAt = Date.now();
+  order.returnRequest.status = 'returned';
+  order.returnRequest.restocked = Boolean(restock);
+
+  if (order.paymentStatus === 'paid') {
+    order.paymentStatus = 'refunded';
+    order.refundStatus = 'completed';
+  }
+
+  order.statusHistory.push({ status: 'returned', changedAt: new Date() });
 
   const updatedOrder = await order.save();
   res.json(updatedOrder);
@@ -446,6 +588,7 @@ const verifyEsewaPayment = async (req, res) => {
   if (data.status === 'COMPLETE') {
     order.isPaid = true;
     order.paidAt = Date.now();
+    order.paymentStatus = 'paid';
     order.paymentResult.id = data.ref_id || transactionUuid;
     order.paymentResult.status = data.status;
     order.paymentResult.update_time = new Date().toISOString();
@@ -455,6 +598,7 @@ const verifyEsewaPayment = async (req, res) => {
     res.json(updatedOrder);
   } else {
     order.paymentResult.status = data.status || 'FAILED';
+    order.paymentStatus = 'failed';
     await order.save();
     res.status(400).json({ message: `Payment not completed. Status: ${data.status || 'UNKNOWN'}` });
   }
@@ -465,7 +609,7 @@ const verifyEsewaPayment = async (req, res) => {
 // @route --->  GET /api/orders/stats
 // @access  Private/Admin
 const getOrderStats = async (req, res) => {
-  const [topProducts, monthlySales, topCustomers, totals] = await Promise.all([
+  const [topProducts, monthlySales, topCustomers, legacyTotals, revenueStats] = await Promise.all([
     Order.aggregate([
       { $unwind: '$orderItems' },
       {
@@ -520,23 +664,18 @@ const getOrderStats = async (req, res) => {
         },
       },
     ]),
-    Promise.all([
-      Order.countDocuments(),
-      Order.aggregate([{ $group: { _id: null, revenue: { $sum: '$totalPrice' } } }]),
-      User.countDocuments(),
-      Product.countDocuments(),
-    ]),
+    Promise.all([User.countDocuments(), Product.countDocuments()]),
+    calculateRevenueStats(),
   ]);
 
-  const [totalOrders, revenueAgg, totalUsers, totalProducts] = totals;
+  const [totalUsers, totalProducts] = legacyTotals;
 
   res.json({
     topProducts,
     monthlySales,
     topCustomers,
     totals: {
-      totalOrders,
-      totalRevenue: revenueAgg[0]?.revenue || 0,
+      ...revenueStats,
       totalUsers,
       totalProducts,
     },

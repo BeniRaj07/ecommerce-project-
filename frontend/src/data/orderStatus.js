@@ -16,6 +16,18 @@ export const ORDER_STATUS_META = {
   return_rejected: { label: 'Return Rejected', color: 'bg-red-50 text-red-600' },
 };
 
+// Payment status is tracked separately from orderStatus — a delivered
+// order isn't proof a payment happened (COD only becomes "paid" once
+// delivery is confirmed), and a cancelled/returned order that was paid
+// needs its own "refunded" state.
+export const PAYMENT_STATUS_META = {
+  pending: { label: 'Payment Pending', color: 'bg-amber-50 text-amber-700' },
+  paid: { label: 'Paid', color: 'bg-emerald-50 text-emerald-700' },
+  failed: { label: 'Payment Failed', color: 'bg-red-50 text-red-600' },
+  refunded: { label: 'Refunded', color: 'bg-slate-100 text-slate-600' },
+  partially_refunded: { label: 'Partially Refunded', color: 'bg-slate-100 text-slate-600' },
+};
+
 export const CANCEL_REASONS = [
   'Ordered by mistake',
   'Wrong size',
