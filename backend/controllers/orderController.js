@@ -162,8 +162,12 @@ const initiateEsewaPayment = async (req, res) => {
       product_code: ESEWA_CONFIG.productCode,
       product_service_charge: productServiceCharge,
       product_delivery_charge: productDeliveryCharge,
-      success_url: `${ESEWA_CONFIG.frontendUrl}/order/${order._id}?esewa=success`,
-      failure_url: `${ESEWA_CONFIG.frontendUrl}/order/${order._id}?esewa=failure`,
+      // eSewa always appends its own "?data=<base64>" to these URLs, even
+      // when they already contain a query string (producing a malformed
+      // "?esewa=success?data=..." double query). Keep these path-only so
+      // eSewa's own "?data=" stays the sole query string on redirect.
+      success_url: `${ESEWA_CONFIG.frontendUrl}/order/${order._id}/esewa/success`,
+      failure_url: `${ESEWA_CONFIG.frontendUrl}/order/${order._id}/esewa/failure`,
       signed_field_names: signedFieldNames,
       signature,
     },

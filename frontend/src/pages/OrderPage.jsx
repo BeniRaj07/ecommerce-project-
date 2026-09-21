@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Link, useParams, useSearchParams } from 'react-router-dom';
+import { Link, useParams, useNavigate } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import API from '../api';
 import Loader from '../components/Loader';
@@ -13,8 +13,8 @@ import { toast } from 'react-toastify';
 const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY);
 
 const OrderPage = () => {
-  const { id: orderId } = useParams();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const { id: orderId, esewaStatus } = useParams();
+  const navigate = useNavigate();
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -41,7 +41,6 @@ const OrderPage = () => {
   }, [orderId, userInfo]);
 
   useEffect(() => {
-    const esewaStatus = searchParams.get('esewa');
     if (!esewaStatus || !userInfo) return;
 
     if (esewaStatus === 'success') {
@@ -54,13 +53,13 @@ const OrderPage = () => {
           toast.error(err?.response?.data?.message || err.message);
         })
         .finally(() => {
-          setSearchParams({}, { replace: true });
+          navigate(`/order/${orderId}`, { replace: true });
         });
     } else if (esewaStatus === 'failure') {
       toast.error('eSewa payment was not completed.');
-      setSearchParams({}, { replace: true });
+      navigate(`/order/${orderId}`, { replace: true });
     }
-  }, [searchParams, orderId, userInfo]);
+  }, [esewaStatus, orderId, userInfo]);
 
   if (loading) return <Loader />;
   if (error) return <p className="text-red-500">{error}</p>;
