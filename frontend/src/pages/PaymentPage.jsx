@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { savePaymentMethod } from '../store/slices/cartSlice';
 
@@ -27,6 +27,10 @@ const PaymentPage = () => {
   return (
     <div className="flex justify-center">
       <div className="w-full max-w-md">
+        <Link to="/" className="flex justify-center items-center gap-2 mb-6">
+          <img src="/images/icons/footwear.png" alt="Juttax" className="h-8 w-8" />
+          <span className="text-2xl font-extrabold tracking-tight text-slate-900">Juttax</span>
+        </Link>
         <h1 className="text-2xl font-bold mb-6 text-center text-slate-900">Payment Method</h1>
         <form onSubmit={submitHandler} className="bg-white shadow-soft rounded-2xl p-6">
           <label className="block text-slate-600 text-sm font-semibold mb-3">Select Method</label>
