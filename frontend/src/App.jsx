@@ -45,7 +45,7 @@ const App = () => {
 
   return (
     <div className="flex flex-col min-h-screen">
-      {!isAdminSection && <TopBar />}
+      {!userInfo?.isAdmin && <TopBar />}
       <Header />
       {!userInfo?.isAdmin && <CategoryNav />}
       {isAdminSection ? (

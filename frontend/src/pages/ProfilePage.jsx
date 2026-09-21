@@ -36,7 +36,11 @@ const ProfilePage = () => {
     if (userInfo) {
       setName(userInfo.name);
       setEmail(userInfo.email);
-      fetchOrders();
+      if (!userInfo.isAdmin) {
+        fetchOrders();
+      } else {
+        setLoadingOrders(false);
+      }
     }
   }, [userInfo]);
 
@@ -59,34 +63,41 @@ const ProfilePage = () => {
     }
   };
 
+  const profileForm = (
+    <div>
+      <h2 className="text-xl font-bold mb-4 text-slate-900">User Profile</h2>
+      {loadingUpdate && <Loader />}
+      <form onSubmit={submitHandler} className="bg-white shadow-soft rounded-2xl p-6 space-y-4">
+        <div>
+          <label className="block text-slate-600 text-sm font-semibold mb-1.5">Name</label>
+          <input type="text" value={name} onChange={(e) => setName(e.target.value)} className="w-full border border-slate-200 rounded-lg py-2 px-3 outline-none focus:ring-2 focus:ring-brand-500" />
+        </div>
+        <div>
+          <label className="block text-slate-600 text-sm font-semibold mb-1.5">Email Address</label>
+          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full border border-slate-200 rounded-lg py-2 px-3 outline-none focus:ring-2 focus:ring-brand-500" />
+        </div>
+        <div>
+          <label className="block text-slate-600 text-sm font-semibold mb-1.5">Password</label>
+          <input type="password" placeholder="Enter new password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full border border-slate-200 rounded-lg py-2 px-3 outline-none focus:ring-2 focus:ring-brand-500" />
+        </div>
+        <div>
+          <label className="block text-slate-600 text-sm font-semibold mb-1.5">Confirm Password</label>
+          <input type="password" placeholder="Confirm new password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className="w-full border border-slate-200 rounded-lg py-2 px-3 outline-none focus:ring-2 focus:ring-brand-500" />
+        </div>
+        <button type="submit" className="w-full bg-brand-600 hover:bg-brand-700 disabled:bg-slate-300 text-white font-semibold py-2.5 rounded-full transition-colors" disabled={loadingUpdate}>
+          Update
+        </button>
+      </form>
+    </div>
+  );
+
+  if (userInfo?.isAdmin) {
+    return <div className="max-w-md mx-auto">{profileForm}</div>;
+  }
+
   return (
     <div className="grid md:grid-cols-3 gap-8">
-
-      <div className="md:col-span-1">
-        <h2 className="text-xl font-bold mb-4 text-slate-900">User Profile</h2>
-        {loadingUpdate && <Loader />}
-        <form onSubmit={submitHandler} className="bg-white shadow-soft rounded-2xl p-6 space-y-4">
-          <div>
-            <label className="block text-slate-600 text-sm font-semibold mb-1.5">Name</label>
-            <input type="text" value={name} onChange={(e) => setName(e.target.value)} className="w-full border border-slate-200 rounded-lg py-2 px-3 outline-none focus:ring-2 focus:ring-brand-500" />
-          </div>
-          <div>
-            <label className="block text-slate-600 text-sm font-semibold mb-1.5">Email Address</label>
-            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full border border-slate-200 rounded-lg py-2 px-3 outline-none focus:ring-2 focus:ring-brand-500" />
-          </div>
-          <div>
-            <label className="block text-slate-600 text-sm font-semibold mb-1.5">Password</label>
-            <input type="password" placeholder="Enter new password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full border border-slate-200 rounded-lg py-2 px-3 outline-none focus:ring-2 focus:ring-brand-500" />
-          </div>
-          <div>
-            <label className="block text-slate-600 text-sm font-semibold mb-1.5">Confirm Password</label>
-            <input type="password" placeholder="Confirm new password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className="w-full border border-slate-200 rounded-lg py-2 px-3 outline-none focus:ring-2 focus:ring-brand-500" />
-          </div>
-          <button type="submit" className="w-full bg-brand-600 hover:bg-brand-700 disabled:bg-slate-300 text-white font-semibold py-2.5 rounded-full transition-colors" disabled={loadingUpdate}>
-            Update
-          </button>
-        </form>
-      </div>
+      <div className="md:col-span-1">{profileForm}</div>
 
       {/* My Orders Section */}
       <div className="md:col-span-2">
