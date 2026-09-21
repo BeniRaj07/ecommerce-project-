@@ -35,6 +35,40 @@ Built on the MERN stack, it implements persistent cart state management, role-ba
 * **Order Fulfillment:** Dedicated portal to view customer orders and update delivery statuses.
 * **User Management:** Ability to view the user base and revoke access for non-admin accounts.
 
+## 🎨 Design System
+
+The UI follows a modern **SaaS-product** visual language — card-based layouts, soft shadows, generous whitespace, a single accent color used sparingly, and clean sans-serif typography. The admin panel and customer storefront share the same tokens but use distinct layouts suited to each audience (a persistent sidebar for admin work vs. a marketing-style storefront for shopping).
+
+### Tokens (`frontend/tailwind.config.js`)
+
+| Token | Values | Used for |
+|---|---|---|
+| `brand-50` → `brand-900` | Indigo/violet scale (`#f4f5ff` → `#332481`) | Primary actions, links, active states, selected filters |
+| `slate-*` (Tailwind default) | `slate-50` → `slate-900` | Page background, card text, borders, admin sidebar |
+| `emerald-*` / `amber-*` / `red-*` (Tailwind default) | — | Semantic status: success/"Made in Nepal" (emerald), "Handmade" (amber), errors/unpaid (red) |
+| `shadow-soft` | Subtle 2-layer shadow | Default card elevation |
+| `shadow-card` / `shadow-card-hover` | Heavier shadow, larger on hover | Emphasized cards, hover-lift interactions |
+| `rounded-2xl` | 1rem radius | Standard card/button radius across the app |
+| `font-sans` | **Inter** (Google Fonts, loaded in `index.html`) | All UI text |
+
+To retheme the app, edit the `brand` color scale in `tailwind.config.js` — every component references it by name (`bg-brand-600`, `text-brand-600`, etc.) rather than hardcoded hex values, so a single change propagates everywhere.
+
+### Layout patterns
+
+* **Customer storefront** (`App.jsx` + `Header`, `TopBar`, `CategoryNav`, `Footer`): sticky translucent header, a mega-menu under "All Categories", a card-based product grid (`Product.jsx`), and a sticky `FilterSidebar` on listing pages.
+* **Admin panel** (`AdminLayout.jsx`): a dedicated dark sidebar (Dashboard / Products / Orders / Users, active-state highlighted) replaces the storefront chrome entirely — `App.jsx` detects `isAdmin && path.startsWith('/admin')` and swaps out `TopBar`/`CategoryNav`/`Footer` and the padded marketing container for `AdminLayout`'s own full-height shell. Admin pages use white `rounded-2xl shadow-soft` cards, pill badges for status (paid/delivered/role), and avatar-initial circles for people.
+* **Admin dashboard charts** (`AdminDashboardPage.jsx`, via `recharts`): best-selling products and monthly sales are each shown as a magnitude chart (bar/line, single brand hue) *and* a share-of-total pie chart (fixed-order categorical palette, capped at 5–6 slices + "Other") — following the standard chart-design rule that ranking/trend data reads best in one hue, while identity/part-to-whole data reads best in distinct categorical colors.
+
+### Component conventions
+
+* Cards: `bg-white rounded-2xl shadow-soft p-5` (or `p-6` for forms)
+* Primary button: `bg-brand-600 hover:bg-brand-700 text-white font-semibold rounded-lg`
+* Secondary button: `bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg`
+* Status/tag pill: `text-xs font-semibold px-2.5 py-1 rounded-full` with a semantic background (e.g. `bg-emerald-50 text-emerald-700`)
+* Inputs: `border border-slate-200 rounded-lg focus:ring-2 focus:ring-brand-500`
+
+There's no separate CSS/SCSS layer beyond `index.css` (Tailwind directives + base font/background) — every component is styled directly with Tailwind utility classes, so the tokens above are the full extent of the "theme."
+
 ## 🏗️ Architecture & Data Flow
 
 The application follows a strict separation of concerns utilizing a **RESTful API** architecture:

@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { useSelector } from 'react-redux';
 import API from '../../api';
 import { toast } from 'react-toastify';
 import Loader from '../../components/Loader';
@@ -43,56 +42,64 @@ const OrderListPage = () => {
 
   return (
     <AdminLayout title="Orders">
-      {loading ? <Loader /> : (
-        <div className="overflow-x-auto">
-          <table className="min-w-full bg-white">
-            <thead className="bg-gray-800 text-white">
-              <tr>
-                <th className="text-left py-3 px-4 uppercase font-semibold text-sm">ID</th>
-                <th className="text-left py-3 px-4 uppercase font-semibold text-sm">User</th>
-                <th className="text-left py-3 px-4 uppercase font-semibold text-sm">Date</th>
-                <th className="text-left py-3 px-4 uppercase font-semibold text-sm">Total</th>
-                <th className="text-left py-3 px-4 uppercase font-semibold text-sm">Paid</th>
-                <th className="text-left py-3 px-4 uppercase font-semibold text-sm">Delivered</th>
-                <th className="text-left py-3 px-4 uppercase font-semibold text-sm"></th>
-              </tr>
-            </thead>
-            <tbody className="text-gray-700">
-              {orders.map((order) => (
-                <tr key={order._id} className="border-b hover:bg-gray-100">
-                  <td className="py-3 px-4">{order._id}</td>
-                  <td className="py-3 px-4">{order.user && order.user.name}</td>
-                  <td className="py-3 px-4">{new Date(order.createdAt).toLocaleDateString()}</td>
-                  <td className="py-3 px-4">Rs {order.totalPrice}/-</td>
-                  <td className="py-3 px-4">
-                    {order.isPaid ? (
-                      <span className="text-green-500 font-bold">{new Date(order.paidAt).toLocaleDateString()}</span>
-                    ) : (
-                      <FaTimes className="text-red-500" />
-                    )}
-                  </td>
-                  <td className="py-3 px-4">
-                    {order.isDelivered ? (
-                      <span className="text-green-500 font-bold">{new Date(order.deliveredAt).toLocaleDateString()}</span>
-                    ) : (
-                      <button onClick={() => deliverHandler(order._id)} className="text-gray-500 hover:text-green-500">
-                        Mark Delivered
-                      </button>
-                    )}
-                  </td>
-                  <td className="py-3 px-4">
-                    <Link to={`/order/${order._id}`}>
-                      <button className="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-1 px-3 rounded text-xs">
-                        Details
-                      </button>
-                    </Link>
-                  </td>
+      <div className="bg-white rounded-2xl shadow-soft overflow-hidden">
+        {loading ? (
+          <div className="py-12"><Loader /></div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full">
+              <thead>
+                <tr className="text-left text-xs uppercase tracking-wide text-slate-400 border-b border-slate-100">
+                  <th className="py-3 px-4 font-semibold">Order ID</th>
+                  <th className="py-3 px-4 font-semibold">Customer</th>
+                  <th className="py-3 px-4 font-semibold">Date</th>
+                  <th className="py-3 px-4 font-semibold">Total</th>
+                  <th className="py-3 px-4 font-semibold">Paid</th>
+                  <th className="py-3 px-4 font-semibold">Delivered</th>
+                  <th className="py-3 px-4 font-semibold"></th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {orders.map((order) => (
+                  <tr key={order._id} className="hover:bg-slate-50">
+                    <td className="py-3 px-4 text-slate-500 text-xs font-mono">{order._id.slice(-8)}</td>
+                    <td className="py-3 px-4 font-medium text-slate-800">{order.user && order.user.name}</td>
+                    <td className="py-3 px-4 text-slate-600">{new Date(order.createdAt).toLocaleDateString()}</td>
+                    <td className="py-3 px-4 font-semibold text-slate-800">Rs {order.totalPrice}/-</td>
+                    <td className="py-3 px-4">
+                      {order.isPaid ? (
+                        <span className="inline-flex items-center bg-emerald-50 text-emerald-700 text-xs font-semibold px-2.5 py-1 rounded-full">
+                          {new Date(order.paidAt).toLocaleDateString()}
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 bg-red-50 text-red-600 text-xs font-semibold px-2.5 py-1 rounded-full">
+                          <FaTimes /> Unpaid
+                        </span>
+                      )}
+                    </td>
+                    <td className="py-3 px-4">
+                      {order.isDelivered ? (
+                        <span className="inline-flex items-center bg-emerald-50 text-emerald-700 text-xs font-semibold px-2.5 py-1 rounded-full">
+                          {new Date(order.deliveredAt).toLocaleDateString()}
+                        </span>
+                      ) : (
+                        <button onClick={() => deliverHandler(order._id)} className="text-xs font-semibold text-brand-600 hover:text-brand-800">
+                          Mark Delivered
+                        </button>
+                      )}
+                    </td>
+                    <td className="py-3 px-4">
+                      <Link to={`/order/${order._id}`} className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold py-1.5 px-3 rounded-lg text-xs transition-colors">
+                        Details
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </AdminLayout>
   );
 };

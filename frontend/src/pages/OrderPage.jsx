@@ -3,7 +3,6 @@ import { Link, useParams } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import API from '../api';
 import Loader from '../components/Loader';
-import { toast } from 'react-toastify';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements } from '@stripe/react-stripe-js';
 import CheckoutForm from '../components/CheckoutForm';
@@ -21,7 +20,7 @@ const OrderPage = () => {
 
   const fetchOrder = async () => {
     try {
-      
+
       const { data } = await API.get(`/api/orders/${orderId}`);
       setOrder(data);
     } catch (err) {
@@ -32,54 +31,54 @@ const OrderPage = () => {
   };
 
   useEffect(() => {
-    
+
     if (userInfo) {
       fetchOrder();
     }
   }, [orderId, userInfo]);
-  
+
   if (loading) return <Loader />;
   if (error) return <p className="text-red-500">{error}</p>;
 
   return (
     order && (
       <>
-        <h1 className="text-3xl font-bold mb-4">Order {order._id}</h1>
+        <h1 className="text-2xl font-bold mb-6 text-slate-900">Order <span className="text-slate-400 font-mono text-lg">{order._id}</span></h1>
         <div className="grid md:grid-cols-3 gap-8">
           {/* Left Column: Details */}
-          <div className="md:col-span-2">
-            <div className="border-b pb-4 mb-4">
-              <h2 className="text-2xl font-bold mb-2">Shipping</h2>
-              <p><strong>Name: </strong> {order.user.name}</p>
-              <p><strong>Email: </strong> <a href={`mailto:${order.user.email}`} className="text-blue-500">{order.user.email}</a></p>
-              <p><strong>Address: </strong>{order.shippingAddress.address}, {order.shippingAddress.city}, {order.shippingAddress.pincode}</p>
+          <div className="md:col-span-2 space-y-6">
+            <div className="bg-white rounded-2xl shadow-soft p-5">
+              <h2 className="text-lg font-bold text-slate-900 mb-3">Shipping</h2>
+              <p className="text-sm text-slate-600"><strong className="text-slate-800">Name: </strong> {order.user.name}</p>
+              <p className="text-sm text-slate-600"><strong className="text-slate-800">Email: </strong> <a href={`mailto:${order.user.email}`} className="text-brand-600 hover:underline">{order.user.email}</a></p>
+              <p className="text-sm text-slate-600"><strong className="text-slate-800">Address: </strong>{order.shippingAddress.address}, {order.shippingAddress.city}, {order.shippingAddress.pincode}</p>
               {order.isDelivered ? (
-                <div className="mt-2 p-2 bg-green-100 text-green-800 rounded">Delivered on {new Date(order.deliveredAt).toLocaleDateString()}</div>
+                <div className="mt-3 inline-block px-3 py-1.5 bg-emerald-50 text-emerald-700 text-sm font-semibold rounded-full">Delivered on {new Date(order.deliveredAt).toLocaleDateString()}</div>
               ) : (
-                <div className="mt-2 p-2 bg-red-100 text-red-800 rounded">Not Delivered</div>
+                <div className="mt-3 inline-block px-3 py-1.5 bg-red-50 text-red-600 text-sm font-semibold rounded-full">Not Delivered</div>
               )}
             </div>
 
-            <div className="border-b pb-4 mb-4">
-              <h2 className="text-2xl font-bold mb-2">Payment Method</h2>
-              <p><strong>Method: </strong>{order.paymentMethod}</p>
+            <div className="bg-white rounded-2xl shadow-soft p-5">
+              <h2 className="text-lg font-bold text-slate-900 mb-3">Payment Method</h2>
+              <p className="text-sm text-slate-600"><strong className="text-slate-800">Method: </strong>{order.paymentMethod}</p>
               {order.isPaid ? (
-                <div className="mt-2 p-2 bg-green-100 text-green-800 rounded">Paid on {new Date(order.paidAt).toLocaleDateString()}</div>
+                <div className="mt-3 inline-block px-3 py-1.5 bg-emerald-50 text-emerald-700 text-sm font-semibold rounded-full">Paid on {new Date(order.paidAt).toLocaleDateString()}</div>
               ) : (
-                <div className="mt-2 p-2 bg-red-100 text-red-800 rounded">Not Paid</div>
+                <div className="mt-3 inline-block px-3 py-1.5 bg-red-50 text-red-600 text-sm font-semibold rounded-full">Not Paid</div>
               )}
             </div>
 
-            <div>
-              <h2 className="text-2xl font-bold mb-2">Order Items</h2>
-              <div className="space-y-4">
+            <div className="bg-white rounded-2xl shadow-soft p-5">
+              <h2 className="text-lg font-bold text-slate-900 mb-3">Order Items</h2>
+              <div className="divide-y divide-slate-100">
                 {order.orderItems.map((item, index) => (
-                  <div key={index} className="flex items-center justify-between">
-                    <div className="flex items-center space-x-4">
-                      <img src={item.image} alt={item.name} className="w-16 h-16 object-cover rounded" />
-                      <Link to={`/product/${item.product}`} className="hover:underline">{item.name}</Link>
+                  <div key={index} className="flex items-center justify-between py-3">
+                    <div className="flex items-center gap-4 min-w-0">
+                      <img src={item.image} alt={item.name} className="w-14 h-14 object-cover rounded-xl flex-shrink-0" />
+                      <Link to={`/product/${item.product}`} className="text-sm font-medium text-slate-800 hover:text-brand-600 truncate">{item.name}</Link>
                     </div>
-                    <div>{item.qty} x Rs {item.price}/- = <b>Rs {(item.qty * item.price).toFixed(2)}/-</b></div>
+                    <div className="text-sm text-slate-600 whitespace-nowrap">{item.qty} x Rs {item.price}/- = <b className="text-slate-900">Rs {(item.qty * item.price).toFixed(2)}/-</b></div>
                   </div>
                 ))}
               </div>
@@ -88,15 +87,15 @@ const OrderPage = () => {
 
           {/* Right Column: Summary */}
           <div>
-            <div className="border border-gray-200 rounded-lg p-4">
-              <h2 className="text-xl font-bold mb-4 uppercase">Order Summary</h2>
-              <div className="space-y-2">
-                <div className="flex justify-between py-2 border-b"><span>Items</span><span>Rs {order.itemsPrice}/-</span></div>
-                <div className="flex justify-between py-2 border-b"><span>GST</span><span>Rs {order.taxPrice}/-</span></div>
-                <div className="flex justify-between py-2 border-b"><span>Shipping</span><span>Rs {order.shippingPrice}/-</span></div>
-                <div className="flex justify-between py-2 font-bold text-lg border-t mt-2"><span>Total</span><span>Rs {order.totalPrice}/-</span></div>
+            <div className="bg-white rounded-2xl shadow-soft p-5 sticky top-4">
+              <h2 className="text-sm font-bold uppercase tracking-wide text-slate-500 mb-4">Order Summary</h2>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between py-2 border-b border-slate-100"><span className="text-slate-500">Items</span><span className="font-medium">Rs {order.itemsPrice}/-</span></div>
+                <div className="flex justify-between py-2 border-b border-slate-100"><span className="text-slate-500">GST</span><span className="font-medium">Rs {order.taxPrice}/-</span></div>
+                <div className="flex justify-between py-2 border-b border-slate-100"><span className="text-slate-500">Shipping</span><span className="font-medium">Rs {order.shippingPrice}/-</span></div>
+                <div className="flex justify-between py-3 font-bold text-base"><span>Total</span><span>Rs {order.totalPrice}/-</span></div>
               </div>
-              
+
               {/* STRIPE PAYMENT FORM */}
               {!order.isPaid && order.paymentMethod !== 'COD' && (
                 <div className="mt-4">

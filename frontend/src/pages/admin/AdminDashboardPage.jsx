@@ -3,6 +3,7 @@ import API from '../../api';
 import { toast } from 'react-toastify';
 import Loader from '../../components/Loader';
 import AdminLayout from '../../components/AdminLayout';
+import { FaMoneyBillWave, FaClipboardList, FaUsers, FaBoxOpen } from 'react-icons/fa';
 import {
   ResponsiveContainer,
   BarChart,
@@ -30,18 +31,33 @@ const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Se
 
 const currency = (n) => `Rs ${Number(n || 0).toLocaleString('en-IN')}/-`;
 
-const StatTile = ({ label, value }) => (
-  <div className="bg-white border rounded-lg p-4">
-    <p className="text-xs uppercase text-gray-500 font-semibold">{label}</p>
-    <p className="text-2xl font-bold mt-1">{value}</p>
-  </div>
-);
+const STAT_ACCENTS = {
+  indigo: 'bg-brand-50 text-brand-600',
+  emerald: 'bg-emerald-50 text-emerald-600',
+  amber: 'bg-amber-50 text-amber-600',
+  sky: 'bg-sky-50 text-sky-600',
+};
+
+const StatTile = (props) => {
+  const Icon = props.icon;
+  return (
+    <div className="bg-white rounded-2xl shadow-soft p-5 flex items-start justify-between">
+      <div>
+        <p className="text-xs uppercase tracking-wide text-slate-400 font-semibold">{props.label}</p>
+        <p className="text-2xl font-bold mt-1 text-slate-900">{props.value}</p>
+      </div>
+      <span className={`w-11 h-11 rounded-xl flex items-center justify-center text-lg ${STAT_ACCENTS[props.accent || 'indigo']}`}>
+        <Icon />
+      </span>
+    </div>
+  );
+};
 
 const ChartCard = ({ title, children, empty }) => (
-  <div className="bg-white border rounded-lg p-4">
-    <h3 className="font-bold mb-4">{title}</h3>
+  <div className="bg-white rounded-2xl shadow-soft p-5">
+    <h3 className="font-bold text-slate-800 mb-4">{title}</h3>
     {empty ? (
-      <p className="text-sm text-gray-500 py-16 text-center">Not enough order data yet.</p>
+      <p className="text-sm text-slate-400 py-16 text-center">Not enough order data yet.</p>
     ) : (
       <div style={{ width: '100%', height: 280 }}>{children}</div>
     )}
@@ -94,10 +110,10 @@ const AdminDashboardPage = () => {
   return (
     <AdminLayout title="Admin Dashboard">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-        <StatTile label="Total Revenue" value={currency(totals.totalRevenue)} />
-        <StatTile label="Total Orders" value={totals.totalOrders} />
-        <StatTile label="Total Users" value={totals.totalUsers} />
-        <StatTile label="Total Products" value={totals.totalProducts} />
+        <StatTile label="Total Revenue" value={currency(totals.totalRevenue)} icon={FaMoneyBillWave} accent="emerald" />
+        <StatTile label="Total Orders" value={totals.totalOrders} icon={FaClipboardList} accent="indigo" />
+        <StatTile label="Total Users" value={totals.totalUsers} icon={FaUsers} accent="sky" />
+        <StatTile label="Total Products" value={totals.totalProducts} icon={FaBoxOpen} accent="amber" />
       </div>
 
       <div className="grid md:grid-cols-2 gap-6 mb-6">
@@ -162,28 +178,35 @@ const AdminDashboardPage = () => {
         </ChartCard>
       </div>
 
-      <div className="bg-white border rounded-lg p-4">
-        <h3 className="font-bold mb-4">Most Frequent Customers</h3>
+      <div className="bg-white rounded-2xl shadow-soft p-5">
+        <h3 className="font-bold text-slate-800 mb-4">Most Frequent Customers</h3>
         {topCustomers.length === 0 ? (
-          <p className="text-sm text-gray-500 py-8 text-center">No orders placed yet.</p>
+          <p className="text-sm text-slate-400 py-8 text-center">No orders placed yet.</p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="min-w-full bg-white">
-              <thead className="bg-gray-800 text-white">
-                <tr>
-                  <th className="text-left py-3 px-4 uppercase font-semibold text-sm">Name</th>
-                  <th className="text-left py-3 px-4 uppercase font-semibold text-sm">Email</th>
-                  <th className="text-left py-3 px-4 uppercase font-semibold text-sm">Orders</th>
-                  <th className="text-left py-3 px-4 uppercase font-semibold text-sm">Total Spent</th>
+            <table className="min-w-full">
+              <thead>
+                <tr className="text-left text-xs uppercase tracking-wide text-slate-400 border-b border-slate-100">
+                  <th className="py-3 px-3 font-semibold">Customer</th>
+                  <th className="py-3 px-3 font-semibold">Email</th>
+                  <th className="py-3 px-3 font-semibold">Orders</th>
+                  <th className="py-3 px-3 font-semibold">Total Spent</th>
                 </tr>
               </thead>
-              <tbody className="text-gray-700">
+              <tbody className="divide-y divide-slate-100">
                 {topCustomers.map((c) => (
-                  <tr key={c.userId} className="border-b hover:bg-gray-100">
-                    <td className="py-3 px-4">{c.name}</td>
-                    <td className="py-3 px-4"><a href={`mailto:${c.email}`} className="text-blue-500">{c.email}</a></td>
-                    <td className="py-3 px-4">{c.orderCount}</td>
-                    <td className="py-3 px-4">{currency(c.totalSpent)}</td>
+                  <tr key={c.userId} className="hover:bg-slate-50">
+                    <td className="py-3 px-3">
+                      <div className="flex items-center gap-3">
+                        <span className="w-8 h-8 rounded-full bg-brand-100 text-brand-700 font-semibold text-xs flex items-center justify-center flex-shrink-0">
+                          {c.name?.charAt(0).toUpperCase()}
+                        </span>
+                        <span className="font-medium text-slate-800">{c.name}</span>
+                      </div>
+                    </td>
+                    <td className="py-3 px-3"><a href={`mailto:${c.email}`} className="text-brand-600 hover:underline">{c.email}</a></td>
+                    <td className="py-3 px-3 text-slate-600">{c.orderCount}</td>
+                    <td className="py-3 px-3 font-semibold text-slate-800">{currency(c.totalSpent)}</td>
                   </tr>
                 ))}
               </tbody>

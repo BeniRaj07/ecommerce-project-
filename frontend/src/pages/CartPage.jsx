@@ -2,6 +2,7 @@ import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { addToCart, removeFromCart } from '../store/slices/cartSlice';
+import { FaTrash, FaShoppingBag } from 'react-icons/fa';
 
 const CartPage = () => {
   const navigate = useNavigate();
@@ -22,22 +23,31 @@ const CartPage = () => {
     navigate('/login?redirect=/shipping');
   };
 
+  const itemsTotal = cartItems.reduce((acc, item) => acc + item.qty * item.price, 0);
+  const tax = itemsTotal * 0.18;
+
   return (
     <div className="grid md:grid-cols-3 gap-8">
       <div className="md:col-span-2">
-        <h1 className="text-3xl mb-6">Shopping Cart</h1>
+        <h1 className="text-2xl font-bold mb-6">Shopping Cart</h1>
         {cartItems.length === 0 ? (
-          <p>Your cart is empty <Link to='/' className="text-blue-500 hover:underline">Go Back</Link></p>
+          <div className="bg-white rounded-2xl shadow-soft p-10 text-center">
+            <FaShoppingBag className="mx-auto text-4xl text-slate-300 mb-3" />
+            <p className="text-slate-500 mb-4">Your cart is empty</p>
+            <Link to="/" className="inline-block bg-brand-600 hover:bg-brand-700 text-white font-semibold py-2 px-5 rounded-lg text-sm transition-colors">
+              Continue Shopping
+            </Link>
+          </div>
         ) : (
-          <div className="space-y-4">
+          <div className="bg-white rounded-2xl shadow-soft divide-y divide-slate-100">
             {cartItems.map((item) => (
-              <div key={item._id} className="flex items-center justify-between border-b pb-4">
-                <div className="flex items-center space-x-4">
-                  <img src={item.image} alt={item.name} className="w-16 h-16 object-cover rounded" />
-                  <div>
-                    <Link to={`/product/${item._id}`} className="hover:underline">{item.name}</Link>
+              <div key={item._id} className="flex items-center justify-between gap-4 p-4">
+                <div className="flex items-center gap-4 min-w-0">
+                  <img src={item.image} alt={item.name} className="w-16 h-16 object-cover rounded-xl flex-shrink-0" />
+                  <div className="min-w-0">
+                    <Link to={`/product/${item._id}`} className="font-medium text-slate-800 hover:text-brand-600 truncate block">{item.name}</Link>
                     {(item.selectedSize || item.selectedColor) && (
-                      <p className="text-xs text-gray-500">
+                      <p className="text-xs text-slate-500 mt-0.5">
                         {item.selectedSize && `Size: ${item.selectedSize}`}
                         {item.selectedSize && item.selectedColor && ' · '}
                         {item.selectedColor && `Color: ${item.selectedColor}`}
@@ -45,23 +55,19 @@ const CartPage = () => {
                     )}
                   </div>
                 </div>
-                
-                <div className="font-bold">Rs {item.price}/-</div>
-                <div>
-                  <select
-                    value={item.qty}
-                    onChange={(e) => addToCartHandler(item, Number(e.target.value))}
-                    className="p-1 border rounded"
-                  >
-                    {[...Array(item.countInStock).keys()].map((x) => (
-                      <option key={x + 1} value={x + 1}>
-                        {x + 1}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <button onClick={() => removeFromCartHandler(item._id)}>
-                  <i className="fas fa-trash text-red-500"></i>
+
+                <div className="font-semibold text-slate-800 whitespace-nowrap">Rs {item.price}/-</div>
+                <select
+                  value={item.qty}
+                  onChange={(e) => addToCartHandler(item, Number(e.target.value))}
+                  className="border border-slate-200 rounded-lg p-1.5 text-sm outline-none focus:ring-2 focus:ring-brand-500"
+                >
+                  {[...Array(item.countInStock).keys()].map((x) => (
+                    <option key={x + 1} value={x + 1}>{x + 1}</option>
+                  ))}
+                </select>
+                <button onClick={() => removeFromCartHandler(item._id)} className="text-slate-400 hover:text-red-500 transition-colors">
+                  <FaTrash />
                 </button>
               </div>
             ))}
@@ -69,28 +75,25 @@ const CartPage = () => {
         )}
       </div>
 
-      {/* Cart summary block with GST */}
       <div>
-        <div className="border border-gray-200 rounded-lg p-4">
-          <h2 className="text-xl font-bold mb-4 uppercase">
-            Price Details
-          </h2>
-          <div className="space-y-2">
-            <div className="flex justify-between py-2 border-b">
-              <span>Price ({cartItems.reduce((acc, item) => acc + item.qty, 0)} items)</span>
-              <span>Rs {cartItems.reduce((acc, item) => acc + item.qty * item.price, 0).toFixed(2)}/-</span>
+        <div className="bg-white rounded-2xl shadow-soft p-5 sticky top-4">
+          <h2 className="text-sm font-bold uppercase tracking-wide text-slate-500 mb-4">Price Details</h2>
+          <div className="space-y-2 text-sm">
+            <div className="flex justify-between py-2 border-b border-slate-100">
+              <span className="text-slate-500">Price ({cartItems.reduce((acc, item) => acc + item.qty, 0)} items)</span>
+              <span className="font-medium">Rs {itemsTotal.toFixed(2)}/-</span>
             </div>
-            <div className="flex justify-between py-2 border-b">
-              <span>GST (18%)</span>
-              <span>+ Rs {(cartItems.reduce((acc, item) => acc + item.qty * item.price, 0) * 0.18).toFixed(2)}/-</span>
+            <div className="flex justify-between py-2 border-b border-slate-100">
+              <span className="text-slate-500">GST (18%)</span>
+              <span className="font-medium">+ Rs {tax.toFixed(2)}/-</span>
             </div>
-            <div className="flex justify-between py-2 font-bold text-lg border-t mt-2">
+            <div className="flex justify-between py-3 font-bold text-base">
               <span>Total Amount</span>
-              <span>Rs {(cartItems.reduce((acc, item) => acc + item.qty * item.price, 0) * 1.18).toFixed(2)}/-</span>
+              <span>Rs {(itemsTotal + tax).toFixed(2)}/-</span>
             </div>
           </div>
           <button
-            className="w-full bg-gray-800 text-white py-2 mt-4 rounded hover:bg-gray-700 disabled:bg-gray-400"
+            className="w-full bg-brand-600 text-white py-2.5 mt-2 rounded-lg font-semibold hover:bg-brand-700 disabled:bg-slate-300 transition-colors"
             disabled={cartItems.length === 0}
             onClick={checkoutHandler}
           >

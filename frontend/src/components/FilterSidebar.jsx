@@ -11,6 +11,9 @@ import {
 const toggleInList = (list, value) =>
   list.includes(value) ? list.filter((v) => v !== value) : [...list, value];
 
+const checkboxClass = 'rounded text-brand-600 focus:ring-brand-500 border-slate-300';
+const sectionTitleClass = 'font-semibold mb-2.5 text-xs uppercase tracking-wide text-slate-400';
+
 const FilterSidebar = ({ subCategories = [], hideLocation = false, sizeOptions = filterSizes }) => {
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -74,23 +77,24 @@ const FilterSidebar = ({ subCategories = [], hideLocation = false, sizeOptions =
   const selectedRating = searchParams.get('minRating');
 
   return (
-    <aside className="w-full md:w-64 flex-shrink-0 bg-white border rounded-lg p-4 space-y-6">
-      <div className="flex justify-between items-center">
-        <h3 className="font-bold text-lg">Filters</h3>
-        <button onClick={clearAll} className="text-xs text-indigo-600 hover:underline">
+    <aside className="w-full md:w-64 flex-shrink-0 bg-white rounded-2xl shadow-soft p-5 divide-y divide-slate-100">
+      <div className="flex justify-between items-center pb-4">
+        <h3 className="font-bold text-slate-900">Filters</h3>
+        <button onClick={clearAll} className="text-xs font-semibold text-brand-600 hover:text-brand-800">
           Clear all
         </button>
       </div>
 
       {subCategories.length > 0 && (
-        <div>
-          <h4 className="font-semibold mb-2 text-sm uppercase text-gray-500">Sub-Category</h4>
-          <ul className="space-y-1">
+        <div className="py-4">
+          <h4 className={sectionTitleClass}>Sub-Category</h4>
+          <ul className="space-y-1.5">
             {subCategories.map((sub) => (
               <li key={sub}>
-                <label className="flex items-center text-sm gap-2">
+                <label className="flex items-center text-sm gap-2 text-slate-600 cursor-pointer">
                   <input
                     type="checkbox"
+                    className={checkboxClass}
                     checked={searchParams.get('sub') === sub}
                     onChange={() => updateParam('sub', searchParams.get('sub') === sub ? null : sub)}
                   />
@@ -102,8 +106,8 @@ const FilterSidebar = ({ subCategories = [], hideLocation = false, sizeOptions =
         </div>
       )}
 
-      <div>
-        <h4 className="font-semibold mb-2 text-sm uppercase text-gray-500">Price (Rs)</h4>
+      <div className="py-4">
+        <h4 className={sectionTitleClass}>Price (Rs)</h4>
         <div className="flex items-center gap-2">
           <input
             type="number"
@@ -111,7 +115,7 @@ const FilterSidebar = ({ subCategories = [], hideLocation = false, sizeOptions =
             placeholder="Min"
             value={minPrice}
             onChange={(e) => setMinPrice(e.target.value)}
-            className="w-1/2 border rounded p-1 text-sm"
+            className="w-1/2 border border-slate-200 rounded-lg p-1.5 text-sm outline-none focus:ring-2 focus:ring-brand-500"
           />
           <input
             type="number"
@@ -119,23 +123,23 @@ const FilterSidebar = ({ subCategories = [], hideLocation = false, sizeOptions =
             placeholder="Max"
             value={maxPrice}
             onChange={(e) => setMaxPrice(e.target.value)}
-            className="w-1/2 border rounded p-1 text-sm"
+            className="w-1/2 border border-slate-200 rounded-lg p-1.5 text-sm outline-none focus:ring-2 focus:ring-brand-500"
           />
         </div>
-        <button onClick={applyPrice} className="mt-2 text-xs bg-gray-800 text-white px-3 py-1 rounded hover:bg-gray-700">
+        <button onClick={applyPrice} className="mt-2.5 text-xs bg-slate-900 text-white px-3 py-1.5 rounded-lg hover:bg-slate-700 font-semibold transition-colors">
           Apply
         </button>
       </div>
 
-      <div>
-        <h4 className="font-semibold mb-2 text-sm uppercase text-gray-500">Size</h4>
+      <div className="py-4">
+        <h4 className={sectionTitleClass}>Size</h4>
         <div className="flex flex-wrap gap-2">
           {sizeOptions.map((s) => (
             <button
               key={s}
               onClick={() => toggleListParam('size', String(s))}
-              className={`text-xs w-9 h-9 rounded border ${
-                selectedSizes.includes(s) ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-700'
+              className={`text-xs w-9 h-9 rounded-lg border font-medium transition-colors ${
+                selectedSizes.includes(s) ? 'bg-brand-600 text-white border-brand-600' : 'bg-white text-slate-600 border-slate-200 hover:border-brand-300'
               }`}
             >
               {s}
@@ -144,13 +148,13 @@ const FilterSidebar = ({ subCategories = [], hideLocation = false, sizeOptions =
         </div>
       </div>
 
-      <div>
-        <h4 className="font-semibold mb-2 text-sm uppercase text-gray-500">Color</h4>
-        <ul className="space-y-1">
+      <div className="py-4">
+        <h4 className={sectionTitleClass}>Color</h4>
+        <ul className="space-y-1.5">
           {filterColors.map((c) => (
             <li key={c}>
-              <label className="flex items-center text-sm gap-2">
-                <input type="checkbox" checked={selectedColors.includes(c)} onChange={() => toggleListParam('color', c)} />
+              <label className="flex items-center text-sm gap-2 text-slate-600 cursor-pointer">
+                <input type="checkbox" className={checkboxClass} checked={selectedColors.includes(c)} onChange={() => toggleListParam('color', c)} />
                 {c}
               </label>
             </li>
@@ -158,13 +162,13 @@ const FilterSidebar = ({ subCategories = [], hideLocation = false, sizeOptions =
         </ul>
       </div>
 
-      <div>
-        <h4 className="font-semibold mb-2 text-sm uppercase text-gray-500">Material</h4>
-        <ul className="space-y-1">
+      <div className="py-4">
+        <h4 className={sectionTitleClass}>Material</h4>
+        <ul className="space-y-1.5">
           {filterMaterials.map((m) => (
             <li key={m}>
-              <label className="flex items-center text-sm gap-2">
-                <input type="checkbox" checked={selectedMaterials.includes(m)} onChange={() => toggleListParam('material', m)} />
+              <label className="flex items-center text-sm gap-2 text-slate-600 cursor-pointer">
+                <input type="checkbox" className={checkboxClass} checked={selectedMaterials.includes(m)} onChange={() => toggleListParam('material', m)} />
                 {m}
               </label>
             </li>
@@ -172,31 +176,32 @@ const FilterSidebar = ({ subCategories = [], hideLocation = false, sizeOptions =
         </ul>
       </div>
 
-      <div>
-        <h4 className="font-semibold mb-2 text-sm uppercase text-gray-500">Maker / Seller</h4>
+      <div className="py-4">
+        <h4 className={sectionTitleClass}>Maker / Seller</h4>
         <div className="flex gap-2">
           <input
             type="text"
             placeholder="Search maker..."
             value={makerText}
             onChange={(e) => setMakerText(e.target.value)}
-            className="w-full border rounded p-1 text-sm"
+            className="w-full border border-slate-200 rounded-lg p-1.5 text-sm outline-none focus:ring-2 focus:ring-brand-500"
           />
-          <button onClick={applyMaker} className="text-xs bg-gray-800 text-white px-3 rounded hover:bg-gray-700">
+          <button onClick={applyMaker} className="text-xs bg-slate-900 text-white px-3 rounded-lg hover:bg-slate-700 font-semibold transition-colors">
             Go
           </button>
         </div>
       </div>
 
       {!hideLocation && (
-        <div>
-          <h4 className="font-semibold mb-2 text-sm uppercase text-gray-500">Location</h4>
-          <ul className="space-y-1">
+        <div className="py-4">
+          <h4 className={sectionTitleClass}>Location</h4>
+          <ul className="space-y-1.5">
             {makerLocations.map((l) => (
               <li key={l.value}>
-                <label className="flex items-center text-sm gap-2">
+                <label className="flex items-center text-sm gap-2 text-slate-600 cursor-pointer">
                   <input
                     type="checkbox"
+                    className={checkboxClass}
                     checked={selectedLocations.includes(l.value)}
                     onChange={() => toggleListParam('location', l.value)}
                   />
@@ -208,25 +213,25 @@ const FilterSidebar = ({ subCategories = [], hideLocation = false, sizeOptions =
         </div>
       )}
 
-      <div>
-        <h4 className="font-semibold mb-2 text-sm uppercase text-gray-500">Sourcing</h4>
-        <ul className="space-y-1 text-sm">
+      <div className="py-4">
+        <h4 className={sectionTitleClass}>Sourcing</h4>
+        <ul className="space-y-1.5 text-sm">
           <li>
-            <label className="flex items-center gap-2">
-              <input type="checkbox" checked={searchParams.get('handmade') === 'true'} onChange={() => toggleBoolean('handmade')} />
+            <label className="flex items-center gap-2 text-slate-600 cursor-pointer">
+              <input type="checkbox" className={checkboxClass} checked={searchParams.get('handmade') === 'true'} onChange={() => toggleBoolean('handmade')} />
               Handmade
             </label>
           </li>
           <li>
-            <label className="flex items-center gap-2">
-              <input type="checkbox" checked={searchParams.get('madeInNepal') === 'true'} onChange={() => toggleBoolean('madeInNepal')} />
+            <label className="flex items-center gap-2 text-slate-600 cursor-pointer">
+              <input type="checkbox" className={checkboxClass} checked={searchParams.get('madeInNepal') === 'true'} onChange={() => toggleBoolean('madeInNepal')} />
               Made in Nepal
             </label>
           </li>
           {stockTypes.map((t) => (
             <li key={t}>
-              <label className="flex items-center gap-2">
-                <input type="checkbox" checked={selectedStockTypes.includes(t)} onChange={() => toggleListParam('stockType', t)} />
+              <label className="flex items-center gap-2 text-slate-600 cursor-pointer">
+                <input type="checkbox" className={checkboxClass} checked={selectedStockTypes.includes(t)} onChange={() => toggleListParam('stockType', t)} />
                 {t}
               </label>
             </li>
@@ -234,13 +239,13 @@ const FilterSidebar = ({ subCategories = [], hideLocation = false, sizeOptions =
         </ul>
       </div>
 
-      <div>
-        <h4 className="font-semibold mb-2 text-sm uppercase text-gray-500">Rating</h4>
-        <ul className="space-y-1 text-sm">
+      <div className="pt-4">
+        <h4 className={sectionTitleClass}>Rating</h4>
+        <ul className="space-y-1.5 text-sm">
           {[4, 3, 2].map((r) => (
             <li key={r}>
-              <label className="flex items-center gap-2">
-                <input type="checkbox" checked={selectedRating === String(r)} onChange={() => setRating(r)} />
+              <label className="flex items-center gap-2 text-slate-600 cursor-pointer">
+                <input type="checkbox" className={checkboxClass} checked={selectedRating === String(r)} onChange={() => setRating(r)} />
                 {r}★ & above
               </label>
             </li>

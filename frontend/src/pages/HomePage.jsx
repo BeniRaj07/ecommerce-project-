@@ -79,15 +79,15 @@ const HomePage = () => {
           <ProductCarousel />
           <FeaturedCategories />
           <ShopByMaker />
-          <section className="py-8 bg-white border-t">
+          <section className="py-14 bg-white border-t border-slate-100">
             <div className="container mx-auto px-4">
-              <h2 className="text-xl font-bold mb-4 text-center">Featured Local Collections</h2>
+              <h2 className="text-2xl font-bold text-center text-slate-900 mb-8">Featured Local Collections</h2>
               <div className="flex flex-wrap justify-center gap-3">
                 {collections.map((c) => (
                   <Link
                     key={c.slug}
                     to={`/collections/${c.slug}`}
-                    className="bg-gray-100 hover:bg-indigo-100 text-gray-700 hover:text-indigo-700 font-semibold text-sm py-2 px-4 rounded-full"
+                    className="bg-slate-100 hover:bg-brand-600 text-slate-700 hover:text-white font-semibold text-sm py-2.5 px-5 rounded-full transition-colors"
                   >
                     {c.label}
                   </Link>
@@ -97,16 +97,16 @@ const HomePage = () => {
           </section>
         </>
       ) : (
-        <Link to='/' className='inline-block mb-4 bg-gray-200 hover:bg-gray-300 text-black font-bold py-2 px-4 rounded'>
-          Go Back
+        <Link to='/' className='inline-flex items-center mb-6 bg-white hover:bg-slate-50 text-slate-700 font-semibold py-2 px-4 rounded-lg shadow-soft text-sm transition-colors'>
+          &larr; Go Back
         </Link>
       )}
 
-      <div className="mt-12">
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-2xl font-bold">{title}</h1>
+      <div className={isListing ? '' : 'mt-4'}>
+        <div className="flex justify-between items-center mb-6 flex-wrap gap-3">
+          <h1 className="text-2xl font-bold text-slate-900">{title}</h1>
           {isListing && (
-            <select value={sort} onChange={(e) => setSort(e.target.value)} className="border rounded p-2 text-sm">
+            <select value={sort} onChange={(e) => setSort(e.target.value)} className="border border-slate-200 rounded-lg p-2 text-sm bg-white outline-none focus:ring-2 focus:ring-brand-500">
               <option value="">Sort: Default</option>
               <option value="newest">Newest</option>
               <option value="bestselling">Best Selling</option>
@@ -130,9 +130,9 @@ const HomePage = () => {
             {loading ? (
               <Loader />
             ) : products.length === 0 ? (
-              <p className="p-6 bg-gray-100 rounded text-center text-gray-600">No footwear matches these filters yet.</p>
+              <p className="p-10 bg-white rounded-2xl shadow-soft text-center text-slate-500">No footwear matches these filters yet.</p>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-8">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
                 {products.map((product) => (
                   <div key={product._id}>
                     <Product product={product} />

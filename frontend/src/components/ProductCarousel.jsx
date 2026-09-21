@@ -43,7 +43,7 @@ const ProductCarousel = () => {
   };
 
   return loading ? <Loader /> : (
-    <div className="mb-8" onWheel={handleWheel}>
+    <div className="mb-10 rounded-2xl overflow-hidden shadow-card" onWheel={handleWheel}>
       <Carousel
         ref={carouselRef}
         showThumbs={false}
@@ -52,7 +52,7 @@ const ProductCarousel = () => {
         emulateTouch
       >
         {products.map((product) => (
-          <div key={product._id} className="relative">
+          <div key={product._id} className="relative bg-slate-100">
             <Link to={`/product/${product._id}`}>
               <img src={product.image} alt={product.name} className="h-96 object-contain"/>
               <p className="absolute bottom-4 left-1/2 -translate-x-1/2 text-white font-bold text-lg px-4 [text-shadow:0_1px_3px_rgba(0,0,0,0.9),0_0_12px_rgba(0,0,0,0.6)]">

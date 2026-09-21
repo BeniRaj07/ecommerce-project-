@@ -40,7 +40,7 @@ const cartSlice = createSlice({
       localStorage.setItem('paymentMethod', JSON.stringify(action.payload));
     },
     // Reducer to clear the cart after placing an order
-    clearCartItems: (state, action) => {
+    clearCartItems: (state) => {
       state.cartItems = [];
       localStorage.removeItem('cartItems');
     },

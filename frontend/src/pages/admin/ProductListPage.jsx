@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { useSelector } from 'react-redux';
 import API from '../../api';
 import { toast } from 'react-toastify';
 import Loader from '../../components/Loader';
@@ -11,8 +10,6 @@ const ProductListPage = () => {
   const [products, setProducts] = useState([]); 
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
-
-  const { userInfo } = useSelector((state) => state.auth);
 
   useEffect(() => {
     const fetchProducts = async () => {
@@ -53,50 +50,63 @@ const ProductListPage = () => {
   };
 
   const createButton = (
-    <button onClick={createProductHandler} className="bg-gray-800 text-white py-2 px-4 rounded hover:bg-gray-700 flex items-center text-sm">
+    <button onClick={createProductHandler} className="bg-brand-600 hover:bg-brand-700 text-white py-2 px-4 rounded-lg flex items-center text-sm font-semibold transition-colors">
       <FaPlus className="mr-2" /> Create Product
     </button>
   );
 
   return (
     <AdminLayout title="Products" actions={createButton}>
-      {loading ? <Loader /> : (
-        <div className="overflow-x-auto">
-          <table className="min-w-full bg-white">
-            <thead className="bg-gray-800 text-white">
-              <tr>
-                <th className="text-left py-3 px-4 uppercase font-semibold text-sm">ID</th>
-                <th className="text-left py-3 px-4 uppercase font-semibold text-sm">Name</th>
-                <th className="text-left py-3 px-4 uppercase font-semibold text-sm">Price</th>
-                <th className="text-left py-3 px-4 uppercase font-semibold text-sm">Category</th>
-                <th className="text-left py-3 px-4 uppercase font-semibold text-sm">Maker</th>
-                <th className="text-left py-3 px-4 uppercase font-semibold text-sm">Brand</th>
-                <th className="text-left py-3 px-4 uppercase font-semibold text-sm"></th>
-              </tr>
-            </thead>
-            <tbody className="text-gray-700">
-              {products.map((product) => (
-                <tr key={product._id} className="border-b hover:bg-gray-100">
-                  <td className="py-3 px-4">{product._id}</td>
-                  <td className="py-3 px-4">{product.name}</td>
-                  <td className="py-3 px-4">Rs {product.price}/-</td>
-                  <td className="py-3 px-4">{product.mainCategory} / {product.subCategory}</td>
-                  <td className="py-3 px-4">{product.maker?.name} · {product.maker?.location}</td>
-                  <td className="py-3 px-4">{product.brand}</td>
-                  <td className="py-3 px-4 flex items-center">
-                    <Link to={`/admin/product/${product._id}/edit`}>
-                      <button className="text-blue-500 hover:text-blue-700 mr-4"><FaEdit /></button>
-                    </Link>
-                    <button onClick={() => deleteHandler(product._id)} className="text-red-500 hover:text-red-700">
-                      <FaTrash />
-                    </button>
-                  </td>
+      <div className="bg-white rounded-2xl shadow-soft overflow-hidden">
+        {loading ? (
+          <div className="py-12"><Loader /></div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full">
+              <thead>
+                <tr className="text-left text-xs uppercase tracking-wide text-slate-400 border-b border-slate-100">
+                  <th className="py-3 px-4 font-semibold">Product</th>
+                  <th className="py-3 px-4 font-semibold">Price</th>
+                  <th className="py-3 px-4 font-semibold">Category</th>
+                  <th className="py-3 px-4 font-semibold">Maker</th>
+                  <th className="py-3 px-4 font-semibold">Brand</th>
+                  <th className="py-3 px-4 font-semibold"></th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {products.map((product) => (
+                  <tr key={product._id} className="hover:bg-slate-50">
+                    <td className="py-3 px-4">
+                      <div className="flex items-center gap-3">
+                        <img src={product.image} alt={product.name} className="w-10 h-10 rounded-lg object-cover flex-shrink-0 bg-slate-100" />
+                        <span className="font-medium text-slate-800">{product.name}</span>
+                      </div>
+                    </td>
+                    <td className="py-3 px-4 font-semibold text-slate-800">Rs {product.price}/-</td>
+                    <td className="py-3 px-4">
+                      <span className="inline-block bg-brand-50 text-brand-700 text-xs font-semibold px-2.5 py-1 rounded-full">
+                        {product.mainCategory} / {product.subCategory}
+                      </span>
+                    </td>
+                    <td className="py-3 px-4 text-slate-600">{product.maker?.name} · {product.maker?.location}</td>
+                    <td className="py-3 px-4 text-slate-600">{product.brand}</td>
+                    <td className="py-3 px-4">
+                      <div className="flex items-center gap-3">
+                        <Link to={`/admin/product/${product._id}/edit`} className="text-brand-600 hover:text-brand-800">
+                          <FaEdit />
+                        </Link>
+                        <button onClick={() => deleteHandler(product._id)} className="text-slate-400 hover:text-red-500">
+                          <FaTrash />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </AdminLayout>
   );
 };

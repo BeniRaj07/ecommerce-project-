@@ -24,17 +24,27 @@ const App = () => {
     return <Navigate to="/admin/dashboard" replace />;
   }
 
+  // The admin panel gets its own full-bleed sidebar layout (see
+  // AdminLayout) instead of the padded marketing-site container/footer.
+  const isAdminSection = userInfo?.isAdmin && location.pathname.startsWith('/admin');
+
   return (
     <div className="flex flex-col min-h-screen">
-      <TopBar />
+      {!isAdminSection && <TopBar />}
       <Header />
       {!userInfo?.isAdmin && <CategoryNav />}
-      <main className="flex-grow bg-gray-50">
-        <div className="container mx-auto px-4 py-8">
+      {isAdminSection ? (
+        <main className="flex-grow flex bg-slate-50">
           <Outlet />
-        </div>
-      </main>
-      <Footer />
+        </main>
+      ) : (
+        <main className="flex-grow bg-gray-50">
+          <div className="container mx-auto px-4 py-8">
+            <Outlet />
+          </div>
+        </main>
+      )}
+      {!isAdminSection && <Footer />}
       <ToastContainer />
     </div>
   );
