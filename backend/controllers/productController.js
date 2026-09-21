@@ -1,4 +1,5 @@
 import Product from '../models/productModel.js';
+import Order from '../models/orderModel.js';
 
 const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -159,6 +160,17 @@ const createProductReview = async (req, res) => {
 
     if (alreadyReviewed) {
       res.status(400).json({ message: 'Product already reviewed' });
+      return;
+    }
+
+    const deliveredOrder = await Order.findOne({
+      user: req.user._id,
+      isDelivered: true,
+      'orderItems.product': product._id,
+    });
+
+    if (!deliveredOrder) {
+      res.status(403).json({ message: 'You can only review a product after it has been delivered to you.' });
       return;
     }
 

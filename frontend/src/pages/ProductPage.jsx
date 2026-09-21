@@ -60,6 +60,8 @@ const ProductPage = () => {
   const [loading, setLoading] = useState(true);
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState('');
+  const [canReview, setCanReview] = useState(false);
+  const [reviewCheckDone, setReviewCheckDone] = useState(false);
   const imgRef = useRef(null);
 
   const { id: productId } = useParams();
@@ -85,10 +87,31 @@ const ProductPage = () => {
     fetchProduct();
   }, [productId]);
 
+  useEffect(() => {
+    const checkReviewEligibility = async () => {
+      if (!userInfo) {
+        setCanReview(false);
+        setReviewCheckDone(true);
+        return;
+      }
+      try {
+        const { data } = await API.get('/api/orders/myorders');
+        const eligible = data.some(
+          (order) => order.isDelivered && order.orderItems.some((item) => item.product === productId)
+        );
+        setCanReview(eligible);
+      } catch {
+        setCanReview(false);
+      } finally {
+        setReviewCheckDone(true);
+      }
+    };
+    checkReviewEligibility();
+  }, [productId, userInfo]);
+
   const addToCartHandler = () => {
     dispatch(addToCart({ ...product, qty, selectedSize, selectedColor }));
     flyToCart(imgRef.current);
-    toast.success(`${product.name} added to cart!`);
   };
 
   const submitHandler = async (e) => {
@@ -243,7 +266,13 @@ const ProductPage = () => {
 
         <div className="mt-8">
           <h2 className="text-xl font-bold text-slate-900 mb-4">Write a Customer Review</h2>
-          {userInfo ? (
+          {!userInfo ? (
+            <p className="p-4 bg-brand-50 rounded-2xl text-slate-700">
+              Please <Link to="/login" className="text-brand-600 hover:underline font-semibold">sign in</Link> to write a review.
+            </p>
+          ) : !reviewCheckDone ? null : product.reviews.some((r) => r.user === userInfo._id) ? (
+            <p className="p-4 bg-brand-50 rounded-2xl text-slate-700">You've already reviewed this product.</p>
+          ) : canReview ? (
             <form onSubmit={submitHandler} className="bg-white rounded-2xl shadow-soft p-5 max-w-lg">
               <div className="mb-4">
                 <label className="block text-slate-600 text-sm font-semibold mb-1.5">Rating</label>
@@ -264,7 +293,7 @@ const ProductPage = () => {
             </form>
           ) : (
             <p className="p-4 bg-brand-50 rounded-2xl text-slate-700">
-              Please <Link to="/login" className="text-brand-600 hover:underline font-semibold">sign in</Link> to write a review.
+              You can write a review once this product has been delivered to you.
             </p>
           )}
         </div>
