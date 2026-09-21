@@ -48,10 +48,10 @@ const RegisterPage = () => {
   return (
     <div className="min-h-[70vh] flex items-center justify-center">
       <div className="w-full max-w-md p-8 bg-white shadow-card rounded-2xl">
-        <div className="flex justify-center items-center gap-2 mb-2">
+        <Link to="/" className="flex justify-center items-center gap-2 mb-2">
           <img src="/images/icons/footwear.png" alt="Juttax" className="h-8 w-8" />
           <span className="text-2xl font-extrabold tracking-tight text-slate-900">Juttax</span>
-        </div>
+        </Link>
         <h1 className="text-xl font-bold mb-6 text-center text-slate-900">Sign Up</h1>
         <form onSubmit={submitHandler} className="space-y-5">
           <div>

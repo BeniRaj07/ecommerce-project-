@@ -18,6 +18,7 @@ import ProductPage from './pages/ProductPage.jsx';
 import CartPage from './pages/CartPage.jsx';
 import LoginPage from './pages/LoginPage.jsx';
 import RegisterPage from './pages/RegisterPage.jsx';
+import AdminLoginPage from './pages/AdminLoginPage.jsx';
 import ShippingPage from './pages/ShippingPage.jsx';
 import PaymentPage from './pages/PaymentPage.jsx';
 import PlaceOrderPage from './pages/PlaceOrderPage.jsx';
@@ -44,6 +45,7 @@ const router = createBrowserRouter(
       <Route path="/cart" element={<CartPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
+      <Route path="/admin/login" element={<AdminLoginPage />} />
 
       {/*  Private User Routes  */}
       <Route path="" element={<PrivateRoute />}>

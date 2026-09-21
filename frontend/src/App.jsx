@@ -13,6 +13,10 @@ import CategoryNav from './components/CategoryNav';
 // are routed to /admin/dashboard instead of browsing these.
 const STOREFRONT_PREFIXES = ['/search/', '/category/', '/makers/', '/collections/'];
 
+// Login/register pages get a bare, distraction-free layout — no promo bar,
+// category nav or footer, just the auth card itself.
+const AUTH_PATHS = ['/login', '/register', '/admin/login'];
+
 const App = () => {
   const { userInfo } = useSelector((state) => state.auth);
   const location = useLocation();
@@ -22,6 +26,17 @@ const App = () => {
 
   if (userInfo?.isAdmin && isStorefrontListing) {
     return <Navigate to="/admin/dashboard" replace />;
+  }
+
+  if (AUTH_PATHS.includes(location.pathname)) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex flex-col">
+        <main className="flex-grow flex items-center justify-center px-4 py-8">
+          <Outlet />
+        </main>
+        <ToastContainer />
+      </div>
+    );
   }
 
   // The admin panel gets its own full-bleed sidebar layout (see
