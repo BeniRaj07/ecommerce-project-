@@ -11,17 +11,15 @@ const ShippingPage = () => {
   const { shippingAddress } = cart;
 
   const [address, setAddress] = useState(shippingAddress?.address || '');
-  const [city, setCity] = useState(shippingAddress?.city || '');
-  const [pincode, setPincode] = useState(shippingAddress?.pincode || '');
-  const [state, setState] = useState(shippingAddress?.state || '');
-  const [country, setCountry] = useState(shippingAddress?.country || 'Nepal');
+  const [location, setLocation] = useState(shippingAddress?.location || '');
 
   const dispatch = useDispatch();
   const navigate = useNavigate();
 
   const submitHandler = (e) => {
     e.preventDefault();
-    dispatch(saveShippingAddress({ address, city, pincode, state, country }));
+    // Juttax currently only delivers within Kathmandu, Nepal
+    dispatch(saveShippingAddress({ address, location, country: 'Nepal' }));
     navigate('/payment');
   };
 
@@ -36,58 +34,22 @@ const ShippingPage = () => {
               className={inputClass}
               id="address"
               type="text"
-              placeholder="Enter address"
+              placeholder="House no. / building / street / area"
               value={address}
               required
               onChange={(e) => setAddress(e.target.value)}
             />
           </div>
           <div>
-            <label className={labelClass} htmlFor="city">City</label>
+            <label className={labelClass} htmlFor="location">Location</label>
             <input
               className={inputClass}
-              id="city"
+              id="location"
               type="text"
-              placeholder="Enter city"
-              value={city}
+              placeholder="e.g. Baneshwor, Kathmandu"
+              value={location}
               required
-              onChange={(e) => setCity(e.target.value)}
-            />
-          </div>
-          <div>
-            <label className={labelClass} htmlFor="pincode">Pincode</label>
-            <input
-              className={inputClass}
-              id="pincode"
-              type="text"
-              placeholder="Enter pincode"
-              value={pincode}
-              required
-              onChange={(e) => setPincode(e.target.value)}
-            />
-          </div>
-          <div>
-            <label className={labelClass} htmlFor="state">State</label>
-            <input
-              className={inputClass}
-              id="state"
-              type="text"
-              placeholder="Enter state"
-              value={state}
-              required
-              onChange={(e) => setState(e.target.value)}
-            />
-          </div>
-          <div>
-            <label className={labelClass} htmlFor="country">Country</label>
-            <input
-              className={inputClass}
-              id="country"
-              type="text"
-              placeholder="Enter country"
-              value={country}
-              required
-              onChange={(e) => setCountry(e.target.value)}
+              onChange={(e) => setLocation(e.target.value)}
             />
           </div>
           <button

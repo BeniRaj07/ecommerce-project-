@@ -3,8 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useSelector, useDispatch } from 'react-redux';
 import { logout } from '../store/slices/authSlice';
 import SearchBox from './SearchBox';
-import LocationModal from './LocationModal';
-import { FaShoppingCart, FaUser, FaUserCircle, FaMapMarkerAlt, FaCaretDown } from 'react-icons/fa';
+import { FaShoppingCart, FaUser, FaUserCircle, FaCaretDown } from 'react-icons/fa';
 
 const Header = () => {
   const { cartItems } = useSelector((state) => state.cart);
@@ -13,8 +12,6 @@ const Header = () => {
   const navigate = useNavigate();
 
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [isLocationModalOpen, setIsLocationModalOpen] = useState(false);
-  const [location, setLocation] = useState('Your Location');
 
   const logoutHandler = () => {
     dispatch(logout());
@@ -23,8 +20,7 @@ const Header = () => {
   };
 
   return (
-    <>
-      <header className="sticky top-0 z-30 bg-white/95 backdrop-blur text-slate-800 shadow-soft py-3 px-4 sm:px-6 lg:px-8">
+    <header className="sticky top-0 z-30 bg-white/95 backdrop-blur text-slate-800 shadow-soft py-3 px-4 sm:px-6 lg:px-8">
         <div className="container mx-auto">
           <div className="flex justify-between items-center gap-4">
             <div className="flex items-center flex-shrink-0">
@@ -32,12 +28,6 @@ const Header = () => {
                 <img src="/images/icons/footwear.png" alt="Juttax" className="h-9 w-9" />
                 <span className="text-xl font-extrabold tracking-tight text-slate-900">Juttax</span>
               </Link>
-              <div className="ml-5 hidden lg:block">
-                <button onClick={() => setIsLocationModalOpen(true)} className="flex items-center text-sm text-slate-500 hover:text-brand-600 transition-colors">
-                  <FaMapMarkerAlt className="mr-1.5" />
-                  {location}
-                </button>
-              </div>
             </div>
             <div className="flex-1 max-w-lg">
               <SearchBox />
@@ -87,9 +77,6 @@ const Header = () => {
           </div>
         </div>
       </header>
-
-      {isLocationModalOpen && <LocationModal setLocation={setLocation} onClose={() => setIsLocationModalOpen(false)} />}
-    </>
   );
 };
 

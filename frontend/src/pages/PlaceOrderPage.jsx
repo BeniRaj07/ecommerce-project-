@@ -50,7 +50,7 @@ const PlaceOrderPage = () => {
         <div className="bg-white rounded-2xl shadow-soft p-5">
           <h2 className="text-lg font-bold text-slate-900 mb-2">Shipping</h2>
           <p className="text-sm text-slate-600">
-            {cart.shippingAddress.address}, {cart.shippingAddress.city}, {cart.shippingAddress.pincode}, {cart.shippingAddress.state}
+            {cart.shippingAddress.address}, {cart.shippingAddress.location}
           </p>
         </div>
 

@@ -51,7 +51,7 @@ const OrderPage = () => {
               <h2 className="text-lg font-bold text-slate-900 mb-3">Shipping</h2>
               <p className="text-sm text-slate-600"><strong className="text-slate-800">Name: </strong> {order.user.name}</p>
               <p className="text-sm text-slate-600"><strong className="text-slate-800">Email: </strong> <a href={`mailto:${order.user.email}`} className="text-brand-600 hover:underline">{order.user.email}</a></p>
-              <p className="text-sm text-slate-600"><strong className="text-slate-800">Address: </strong>{order.shippingAddress.address}, {order.shippingAddress.city}, {order.shippingAddress.pincode}</p>
+              <p className="text-sm text-slate-600"><strong className="text-slate-800">Address: </strong>{order.shippingAddress.address}, {order.shippingAddress.location}</p>
               {order.isDelivered ? (
                 <div className="mt-3 inline-block px-3 py-1.5 bg-emerald-50 text-emerald-700 text-sm font-semibold rounded-full">Delivered on {new Date(order.deliveredAt).toLocaleDateString()}</div>
               ) : (

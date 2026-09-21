@@ -43,7 +43,7 @@ const ProductPage = () => {
 
   const addToCartHandler = () => {
     dispatch(addToCart({ ...product, qty, selectedSize, selectedColor }));
-    navigate('/cart');
+    navigate(userInfo ? '/shipping' : '/login?redirect=/shipping');
   };
 
   const submitHandler = async (e) => {
