@@ -1,8 +1,12 @@
 // Juttax seed catalog — Men / Women / Kids / Traditional & Local.
 //
-// Product photography is placeholder for Men/Women/Kids (the repo only
-// ships a handful of shoe photos) — replace `image` via the admin product
-// editor once real photos are available.
+// Men/Women/Kids products use a plain "photo coming soon" placeholder
+// (no real photography ships in the repo) — replace `image` via the admin
+// product editor once real photos are available. The previous placeholder
+// pool pointed at real Nike/Adidas/On product photography inherited from
+// the original template; that's a trademark/copyright problem regardless
+// of which (unrelated, unbranded) product it's attached to, so it's been
+// replaced with an honest, unbranded placeholder instead.
 //
 // The 12 Traditional / Local products point at
 // /images/traditional/<filename>.jpg (see frontend/public/images/traditional/README.md
@@ -12,13 +16,7 @@
 // Makers are based in the three Kathmandu Valley footwear-crafting hubs:
 // Kathmandu, Lalitpur and Bhaktapur.
 
-const shoeImages = [
-  '/images/running-shoes-grey.jpg',
-  '/images/nike-flyknit-red.jpg',
-  '/images/adidas-runners-grey.jpg',
-  '/images/nike-superrep-green.jpg',
-];
-const img = (i) => shoeImages[i % shoeImages.length];
+const img = () => '/images/placeholder-shoe.svg';
 const tradImg = (filename) => `/images/traditional/${filename}`;
 
 const MENS_SIZES = [39, 40, 41, 42, 43, 44];
