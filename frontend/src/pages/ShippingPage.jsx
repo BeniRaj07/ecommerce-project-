@@ -1,99 +1,67 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useDispatch, useSelector } from 'react-redux'; 
-import { saveShippingAddress } from '../store/slices/cartSlice'; 
+import { Link, useNavigate } from 'react-router-dom';
+import { useDispatch, useSelector } from 'react-redux';
+import { saveShippingAddress } from '../store/slices/cartSlice';
+
+const inputClass = 'w-full border border-slate-200 rounded-lg py-2.5 px-3 outline-none focus:ring-2 focus:ring-brand-500';
+const labelClass = 'block text-slate-600 text-sm font-semibold mb-1.5';
 
 const ShippingPage = () => {
-  // Get the existing address from the Redux state, if it exists
   const cart = useSelector((state) => state.cart);
   const { shippingAddress } = cart;
 
-  // Pre-fill the form fields with data from shippingAddress or use empty strings
   const [address, setAddress] = useState(shippingAddress?.address || '');
-  const [city, setCity] = useState(shippingAddress?.city || '');
-  const [pincode, setPincode] = useState(shippingAddress?.pincode || '');
-  const [state, setState] = useState(shippingAddress?.state || '');
-  const [country, setCountry] = useState(shippingAddress?.country || 'India');
+  const [location, setLocation] = useState(shippingAddress?.location || '');
 
   const dispatch = useDispatch();
   const navigate = useNavigate();
 
-  // Update the submit handler to dispatch the action
   const submitHandler = (e) => {
     e.preventDefault();
-    dispatch(saveShippingAddress({ address, city, pincode, state, country }));
+    // Juttax currently only delivers within Kathmandu, Nepal
+    dispatch(saveShippingAddress({ address, location, country: 'Nepal' }));
     navigate('/payment');
   };
 
   return (
     <div className="flex justify-center">
       <div className="w-full max-w-md">
-        <h1 className="text-3xl font-bold mb-6 text-center">Shipping</h1>
-        <form onSubmit={submitHandler} className="bg-white shadow-md rounded px-8 pt-6 pb-8 mb-4">
-          <div className="mb-4">
-            <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="address">
-              Address
-            </label>
+        <Link to="/" className="flex justify-center items-center gap-2 mb-6">
+          <img src="/images/icons/footwear.png" alt="Juttax" className="h-8 w-8" />
+          <span className="text-2xl font-extrabold tracking-tight text-slate-900">Juttax</span>
+        </Link>
+        <h1 className="font-display text-2xl font-bold mb-6 text-center text-slate-900">Shipping</h1>
+        <form onSubmit={submitHandler} className="bg-white shadow-soft rounded-2xl p-6 space-y-4">
+          <div>
+            <label className={labelClass} htmlFor="address">Address</label>
             <input
-              className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+              className={inputClass}
               id="address"
               type="text"
-              placeholder="Enter address"
+              placeholder="House no. / building / street / area"
               value={address}
               required
               onChange={(e) => setAddress(e.target.value)}
             />
           </div>
-          <div className="mb-4">
-            <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="city">
-              City
-            </label>
+          <div>
+            <label className={labelClass} htmlFor="location">Location</label>
             <input
-              className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700"
-              id="city"
+              className={inputClass}
+              id="location"
               type="text"
-              placeholder="Enter city"
-              value={city}
+              placeholder="e.g. Baneshwor, Kathmandu"
+              value={location}
               required
-              onChange={(e) => setCity(e.target.value)}
+              onChange={(e) => setLocation(e.target.value)}
             />
           </div>
-          <div className="mb-4">
-            <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="pincode">
-              Pincode
-            </label>
-            <input
-              className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700"
-              id="pincode"
-              type="text"
-              placeholder="Enter pincode"
-              value={pincode}
-              required
-              onChange={(e) => setPincode(e.target.value)}
-            />
-          </div>
-          <div className="mb-6">
-            <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="state">
-              State
-            </label>
-            <input
-              className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700"
-              id="state"
-              type="text"
-              placeholder="Enter state"
-              value={state}
-              required
-              onChange={(e) => setState(e.target.value)}
-            />
-          </div>
-          <div className="flex items-center justify-between">
-            <button
-              className="w-full bg-gray-800 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
-              type="submit"
-            >
-              Continue
-            </button>
-          </div>
+          <button
+            className="w-full bg-brand-600 hover:bg-brand-700 text-white font-semibold py-2.5 rounded-full transition-colors"
+            type="submit"
+          >
+            Continue
+          </button>
         </form>
       </div>
     </div>

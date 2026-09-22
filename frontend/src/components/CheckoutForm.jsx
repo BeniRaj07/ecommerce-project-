@@ -4,7 +4,7 @@ import { useSelector } from 'react-redux';
 import API from '../api';
 import { toast } from 'react-toastify';
 
-const CheckoutForm = ({ order, refetchOrder }) => {
+const CheckoutForm = ({ order, refetchOrder, onSuccess }) => {
   const stripe = useStripe();
   const elements = useElements();
   const { userInfo } = useSelector((state) => state.auth);
@@ -22,7 +22,6 @@ const CheckoutForm = ({ order, refetchOrder }) => {
     const cardElement = elements.getElement(CardElement);
 
     try {
-      // 1. Create a Payment Method with Stripe
       const { error, paymentMethod } = await stripe.createPaymentMethod({
         type: 'card',
         card: cardElement,
@@ -34,7 +33,6 @@ const CheckoutForm = ({ order, refetchOrder }) => {
         return;
       }
 
-      // 2. Call your backend to update the order to paid
       const paymentResult = {
         id: paymentMethod.id,
         status: 'COMPLETED',
@@ -42,11 +40,11 @@ const CheckoutForm = ({ order, refetchOrder }) => {
         email_address: userInfo.email,
       };
 
-      
+
       await API.put(`/api/orders/${order._id}/pay`, paymentResult);
 
-      toast.success('Payment Successful!');
-      refetchOrder(); // Refetch order to show the 'Paid' status
+      onSuccess();
+      refetchOrder();
     } catch (err) {
       toast.error(err?.response?.data?.message || err.message);
     } finally {
@@ -56,13 +54,13 @@ const CheckoutForm = ({ order, refetchOrder }) => {
 
   return (
     <form onSubmit={handleSubmit}>
-      <div className="mb-4 p-2 border rounded">
+      <div className="mb-3 p-3 border border-slate-200 rounded-lg">
         <CardElement />
       </div>
       <button
         type="submit"
         disabled={!stripe || loading}
-        className="w-full bg-green-500 text-white py-2 mt-2 rounded hover:bg-green-600 disabled:bg-gray-400"
+        className="w-full bg-emerald-600 text-white py-2.5 rounded-lg font-semibold hover:bg-emerald-700 disabled:bg-slate-300 transition-colors"
       >
         {loading ? 'Processing...' : `Pay Rs ${order.totalPrice}/-`}
       </button>

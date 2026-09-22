@@ -1,58 +1,73 @@
 import React from 'react';
-import { FaFacebook, FaTwitter, FaInstagram } from 'react-icons/fa';
+import { Link } from 'react-router-dom';
+import { FaFacebook, FaTwitter, FaInstagram, FaHandsHelping, FaShippingFast, FaMapMarkerAlt, FaAward } from 'react-icons/fa';
+import { topNav, makerLocations } from '../data/categories';
+
+const features = [
+  { icon: FaHandsHelping, label: 'Handmade by local artisans' },
+  { icon: FaShippingFast, label: 'Free delivery over Rs 500/-' },
+  { icon: FaMapMarkerAlt, label: 'Made in Nepal, sold locally' },
+  { icon: FaAward, label: 'Best price on the market' },
+];
 
 const Footer = () => {
   return (
-    <footer className="bg-gray-800 text-white pt-12">
+    <footer className="bg-slate-900 text-slate-300 pt-14">
       <div className="container mx-auto px-4">
         {/* Feature Icons Section */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-8 text-center border-b border-gray-700 pb-8">
-            <div><i className="fas fa-box-open text-3xl mb-2 text-indigo-400"></i><p>Everyday fresh products</p></div>
-            <div><i className="fas fa-shipping-fast text-3xl mb-2 text-indigo-400"></i><p>Free delivery over Rs 500/-</p></div>
-            <div><i className="fas fa-percent text-3xl mb-2 text-indigo-400"></i><p>Daily Mega Discounts</p></div>
-            <div><i className="fas fa-award text-3xl mb-2 text-indigo-400"></i><p>Best price on the market</p></div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-8 text-center border-b border-slate-800 pb-10">
+          {features.map((feature) => {
+            const Icon = feature.icon;
+            return (
+              <div key={feature.label} className="flex flex-col items-center gap-2">
+                <span className="w-11 h-11 rounded-full bg-brand-500/10 text-brand-400 flex items-center justify-center text-xl">
+                  <Icon />
+                </span>
+                <p className="text-sm text-slate-400">{feature.label}</p>
+              </div>
+            );
+          })}
         </div>
 
         {/* Links and Socials Section */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-8 py-8">
-            <div>
-                <h3 className="font-bold mb-4">ABOUT US</h3>
-                <p className="text-gray-400">E-Commerce Pro is your one-stop shop for the best products online.</p>
-                <div className="flex space-x-4 mt-4">
-                    <a href="#" className="hover:text-indigo-400"><FaFacebook size={20}/></a>
-                    <a href="#" className="hover:text-indigo-400"><FaTwitter size={20}/></a>
-                    <a href="#" className="hover:text-indigo-400"><FaInstagram size={20}/></a>
-                </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-10 py-10">
+          <div>
+            <h3 className="text-white font-bold tracking-wide text-sm mb-4">ABOUT US</h3>
+            <p className="text-slate-400 text-sm leading-relaxed">
+              Juttax connects Nepali footwear makers — across Kathmandu, Lalitpur and Bhaktapur — with shoppers
+              looking for handmade, traditional and everyday footwear.
+            </p>
+            <div className="flex gap-3 mt-5">
+              <a href="#" className="w-9 h-9 rounded-full bg-slate-800 flex items-center justify-center hover:bg-brand-600 hover:text-white transition-colors"><FaFacebook size={16} /></a>
+              <a href="#" className="w-9 h-9 rounded-full bg-slate-800 flex items-center justify-center hover:bg-brand-600 hover:text-white transition-colors"><FaTwitter size={16} /></a>
+              <a href="#" className="w-9 h-9 rounded-full bg-slate-800 flex items-center justify-center hover:bg-brand-600 hover:text-white transition-colors"><FaInstagram size={16} /></a>
             </div>
-            <div>
-                <h3 className="font-bold mb-4">CATEGORIES</h3>
-                <ul>
-                    <li className="mb-2"><a href="/category/fashion" className="text-gray-400 hover:text-white">Fashion</a></li>
-                    <li className="mb-2"><a href="/category/electronics" className="text-gray-400 hover:text-white">Electronics</a></li>
-                    <li className="mb-2"><a href="/category/groceries" className="text-gray-400 hover:text-white">Groceries</a></li>
-                </ul>
-            </div>
-            <div>
-                <h3 className="font-bold mb-4">USEFUL LINKS</h3>
-                <ul>
-                    <li className="mb-2"><a href="#" className="text-gray-400 hover:text-white">Terms of Service</a></li>
-                    <li className="mb-2"><a href="#" className="text-gray-400 hover:text-white">Privacy Policy</a></li>
-                    <li className="mb-2"><a href="mailto:support@ecommercepro.com" className="text-gray-400 hover:text-white">Contact Us</a></li>
-                </ul>
-            </div>
-            <div>
-                <h3 className="font-bold mb-4">NEWSLETTER</h3>
-                <p className="text-gray-400 mb-2">Subscribe for updates and promotions.</p>
-                <form className="flex">
-                    <input type="email" placeholder="Your Email" className="p-2 rounded-l-md text-black w-full" />
-                    <button type="submit" className="bg-indigo-600 hover:bg-indigo-700 p-2 rounded-r-md">Subscribe</button>
-                </form>
-            </div>
+          </div>
+          <div>
+            <h3 className="text-white font-bold tracking-wide text-sm mb-4">CATEGORIES</h3>
+            <ul className="space-y-2.5 text-sm">
+              {topNav.map((item) => (
+                <li key={item.label}>
+                  <Link to={item.to} className="text-slate-400 hover:text-white transition-colors">{item.label}</Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div>
+            <h3 className="text-white font-bold tracking-wide text-sm mb-4">SHOP BY MAKER</h3>
+            <ul className="space-y-2.5 text-sm">
+              {makerLocations.map((loc) => (
+                <li key={loc.slug}>
+                  <Link to={`/makers/${loc.slug}`} className="text-slate-400 hover:text-white transition-colors">{loc.label}</Link>
+                </li>
+              ))}
+            </ul>
+          </div>
         </div>
 
         {/* Copyright Section */}
-        <div className="text-center py-4 border-t border-gray-700">
-            <p>Copyright {new Date().getFullYear()}. All rights reserved</p>
+        <div className="text-center py-5 border-t border-slate-800 text-sm text-slate-500">
+          <p>Copyright {new Date().getFullYear()}. All rights reserved</p>
         </div>
       </div>
     </footer>

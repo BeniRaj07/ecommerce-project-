@@ -1,7 +1,7 @@
 {
-  "name": "ecommerce-pro-api",
+  "name": "juttax-api",
   "version": "1.0.0",
-  "description": "Backend server for an e-commerce application built with Node.js, Express, and MongoDB.",
+  "description": "Backend server for Juttax, a Nepali footwear marketplace, built with Node.js, Express, and MongoDB.",
   "main": "server.js",
   "type": "module",
   "scripts": {
@@ -14,10 +14,10 @@
   "license": "ISC",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/buildsbysaif/mern-ecommerce-project.git"
+    "url": "git+https://github.com/BeniRaj07/ecommerce-project-.git"
   },
   "bugs": {
-    "url": "https://github.com/buildsbysaif/mern-ecommerce-project/issues"
+    "url": "https://github.com/BeniRaj07/ecommerce-project-/issues"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

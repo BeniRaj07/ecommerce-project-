@@ -5,6 +5,34 @@ const authUser = async (req, res) => {
   const { email, password } = req.body;
   const user = await User.findOne({ email });
   if (user && (await user.matchPassword(password))) {
+    if (user.isAdmin) {
+      res.status(403).json({ message: 'Admins must sign in from the admin login page' });
+      return;
+    }
+    res.json({
+      _id: user._id,
+      name: user.name,
+      email: user.email,
+      isAdmin: user.isAdmin,
+      token: generateToken(user._id),
+    });
+  } else {
+    res.status(401).json({ message: 'Invalid email or password' });
+  }
+};
+
+// @desc   Admin-only sign in — the customer login rejects admin accounts,
+//         so this is the sole entry point for the admin panel
+// @route  POST /api/users/admin/login
+// @access Public
+const authAdmin = async (req, res) => {
+  const { email, password } = req.body;
+  const user = await User.findOne({ email });
+  if (user && (await user.matchPassword(password))) {
+    if (!user.isAdmin) {
+      res.status(403).json({ message: 'Not authorized as an admin' });
+      return;
+    }
     res.json({
       _id: user._id,
       name: user.name,
@@ -94,6 +122,7 @@ const deleteUser = async (req, res) => {
 
 export {
   authUser,
+  authAdmin,
   registerUser,
   getUserProfile,
   updateUserProfile,

@@ -1,5 +1,6 @@
 import axios from 'axios';
-import store from './store/store'; 
+import store from './store/store';
+import { logout } from './store/slices/authSlice';
 
 const API = axios.create({
   baseURL: import.meta.env.VITE_API_URL || '',
@@ -17,5 +18,18 @@ API.interceptors.request.use((config) => {
 }, (error) => {
   return Promise.reject(error);
 });
+
+// If the server ever rejects our token (expired, or the account behind it no
+// longer exists — e.g. the database was reseeded), clear the stale session
+// instead of leaving the app stuck thinking it's still logged in.
+API.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error?.response?.status === 401 && store.getState().auth.userInfo) {
+      store.dispatch(logout());
+    }
+    return Promise.reject(error);
+  }
+);
 
 export default API;

@@ -1,30 +1,39 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import { FaMale, FaFemale, FaChild, FaPaintBrush } from 'react-icons/fa';
+import { topNav } from '../data/categories';
 
-
-const categories = [
-  { name: 'Fashion', icon: '/images/icons/fashion.png', link: '/category/fashion' },
-  { name: 'Electronics', icon: '/images/icons/electronics.png', link: '/category/electronics' },
-  { name: 'Bags', icon: '/images/icons/bags.png', link: '/category/bags' },
-  { name: 'Footwear', icon: '/images/icons/footwear.png', link: '/category/footwear' },
-  { name: 'Groceries', icon: '/images/icons/groceries.png', link: '/category/groceries' },
-  { name: 'Beauty', icon: '/images/icons/beauty.png', link: '/category/beauty' },
-];
+const icons = {
+  Men: FaMale,
+  Women: FaFemale,
+  Kids: FaChild,
+  'Traditional / Local': FaPaintBrush,
+};
 
 const FeaturedCategories = () => {
   return (
-    <section className="py-12 bg-white">
+    <section className="py-14 bg-white">
       <div className="container mx-auto px-4">
-        <h2 className="text-2xl font-bold mb-6 text-center">Featured Categories</h2>
-        <div className="flex flex-wrap justify-center gap-8">
-          {categories.map((category) => (
-            <Link to={category.link} key={category.name} className="flex flex-col items-center text-center group">
-              <div className="w-24 h-24 p-4 bg-gray-100 rounded-full flex items-center justify-center group-hover:bg-indigo-100 transition-colors">
-                <img src={category.icon} alt={category.name} className="w-12 h-12 object-contain" />
-              </div>
-              <span className="mt-2 font-semibold text-gray-700">{category.name}</span>
-            </Link>
-          ))}
+        <div className="text-center mb-9">
+          <h2 className="font-display text-3xl font-bold text-slate-900">Shop by Category</h2>
+          <p className="text-slate-500 text-sm mt-1">Find footwear for everyone, from everyday wear to festive traditions</p>
+        </div>
+        <div className="flex flex-wrap justify-center gap-4 sm:gap-6">
+          {topNav.map((item) => {
+            const Icon = icons[item.label];
+            return (
+              <Link
+                to={item.to}
+                key={item.label}
+                className="flex flex-col items-center text-center group bg-white border border-slate-100 rounded-2xl px-6 py-6 w-32 shadow-soft hover:shadow-card-hover hover:-translate-y-0.5 transition-all"
+              >
+                <div className="w-14 h-14 rounded-full bg-brand-50 flex items-center justify-center group-hover:bg-brand-600 transition-colors">
+                  <Icon className="text-brand-600 group-hover:text-white transition-colors" size={22} />
+                </div>
+                <span className="mt-3 text-sm font-semibold text-slate-700">{item.label}</span>
+              </Link>
+            );
+          })}
         </div>
       </div>
     </section>
