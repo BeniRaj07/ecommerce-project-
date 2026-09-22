@@ -6,16 +6,7 @@ import Loader from '../../components/Loader';
 import AdminLayout from '../../components/AdminLayout';
 import ProductImage from '../../components/ProductImage';
 import OrderStatusBadge from '../../components/OrderStatusBadge';
-import { SHIPPING_STAGE_LABELS } from '../../data/orderStatus';
-
-// Admin can only ever advance an order one shipping stage at a time —
-// mirrors the backend's SHIPPING_TRANSITIONS map.
-const NEXT_SHIP_STATUS = {
-  pending: 'to_ship',
-  to_ship: 'shipped',
-  shipped: 'to_receive',
-  to_receive: 'delivered',
-};
+import { getNextOrderAction } from '../../data/orderStatus';
 
 const currency = (n) => `Rs ${Number(n || 0).toLocaleString('en-IN')}/-`;
 const formatDateTime = (d) => (d ? new Date(d).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) : '—');
@@ -49,6 +40,10 @@ const OrderListPage = () => {
   }, []);
 
   const runAction = async (orderId, url, body, successMsg) => {
+    // Belt-and-suspenders: ignore a second call for the same order even if
+    // it somehow fires before the disabled state re-renders (e.g. a fast
+    // repeated key press), so the status API is never hit twice at once.
+    if (busyId === orderId) return;
     setBusyId(orderId);
     try {
       await API.put(url, body || {});
@@ -62,10 +57,10 @@ const OrderListPage = () => {
   };
 
   const advanceStatus = (order) => {
-    const next = NEXT_SHIP_STATUS[order.orderStatus];
-    if (!next) return;
-    if (!window.confirm(`Mark this order as "${SHIPPING_STAGE_LABELS[next]}"?`)) return;
-    runAction(order._id, `/api/orders/${order._id}/status`, { status: next }, 'Order status updated');
+    const action = getNextOrderAction(order);
+    if (!action) return;
+    if (!window.confirm(`${action.label}?`)) return;
+    runAction(order._id, `/api/orders/${order._id}/status`, { status: action.nextStatus }, 'Order status updated');
   };
 
   const approveCancellation = (order) => {
@@ -95,11 +90,15 @@ const OrderListPage = () => {
   const renderActions = (order) => {
     const busy = busyId === order._id;
 
+    if (busy) {
+      return <span className="text-xs font-semibold text-slate-400">Updating...</span>;
+    }
+
     if (order.orderStatus === 'cancel_requested') {
       return (
         <div className="flex flex-col items-start gap-1.5">
-          <button disabled={busy} onClick={() => approveCancellation(order)} className="text-xs font-semibold text-emerald-600 hover:text-emerald-800 disabled:opacity-50">Approve Cancellation</button>
-          <button disabled={busy} onClick={() => rejectCancellation(order)} className="text-xs font-semibold text-red-500 hover:text-red-700 disabled:opacity-50">Reject Cancellation</button>
+          <button onClick={() => approveCancellation(order)} className="text-xs font-semibold text-emerald-600 hover:text-emerald-800">Approve Cancellation</button>
+          <button onClick={() => rejectCancellation(order)} className="text-xs font-semibold text-red-500 hover:text-red-700">Reject Cancellation</button>
         </div>
       );
     }
@@ -107,22 +106,23 @@ const OrderListPage = () => {
     if (order.orderStatus === 'return_requested') {
       return (
         <div className="flex flex-col items-start gap-1.5">
-          <button disabled={busy} onClick={() => approveReturn(order)} className="text-xs font-semibold text-emerald-600 hover:text-emerald-800 disabled:opacity-50">Approve Return</button>
-          <button disabled={busy} onClick={() => rejectReturn(order)} className="text-xs font-semibold text-red-500 hover:text-red-700 disabled:opacity-50">Reject Return</button>
+          <button onClick={() => approveReturn(order)} className="text-xs font-semibold text-emerald-600 hover:text-emerald-800">Approve Return</button>
+          <button onClick={() => rejectReturn(order)} className="text-xs font-semibold text-red-500 hover:text-red-700">Reject Return</button>
         </div>
       );
     }
 
     if (order.orderStatus === 'return_approved') {
       return (
-        <button disabled={busy} onClick={() => markReturned(order)} className="text-xs font-semibold text-brand-600 hover:text-brand-800 disabled:opacity-50">Mark Returned</button>
+        <button onClick={() => markReturned(order)} className="text-xs font-semibold text-brand-600 hover:text-brand-800">Mark Returned</button>
       );
     }
 
-    if (NEXT_SHIP_STATUS[order.orderStatus]) {
+    const action = getNextOrderAction(order);
+    if (action) {
       return (
         <button disabled={busy} onClick={() => advanceStatus(order)} className="text-xs font-semibold text-brand-600 hover:text-brand-800 disabled:opacity-50">
-          Mark as {SHIPPING_STAGE_LABELS[NEXT_SHIP_STATUS[order.orderStatus]]}
+          {busy ? 'Updating...' : action.label}
         </button>
       );
     }

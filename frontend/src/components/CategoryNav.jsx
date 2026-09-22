@@ -1,10 +1,17 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, NavLink, useLocation } from 'react-router-dom';
 import { FaBars } from 'react-icons/fa';
 import { footwearCategories, topNav } from '../data/categories';
 
 const CategoryNav = () => {
   const [isMegaOpen, setIsMegaOpen] = useState(false);
+  const location = useLocation();
+
+  // "All Categories" reads as active whenever the URL isn't one of the
+  // specific category routes below — i.e. the unfiltered browsing page,
+  // search results, or a maker page — derived from the route so it
+  // survives a refresh instead of living in component state.
+  const isAnyCategoryActive = topNav.some((item) => location.pathname === item.to);
 
   return (
     <nav className="bg-white border-b border-slate-100 relative">
@@ -15,7 +22,13 @@ const CategoryNav = () => {
             onMouseEnter={() => setIsMegaOpen(true)}
             onMouseLeave={() => setIsMegaOpen(false)}
           >
-            <button className="bg-slate-900 text-white text-sm font-semibold py-3 px-4 inline-flex items-center gap-2 hover:bg-slate-800 transition-colors">
+            <button
+              className={`text-sm font-semibold py-3 px-4 inline-flex items-center gap-2 transition-colors border-b-2 ${
+                isAnyCategoryActive
+                  ? 'bg-slate-900 text-white border-transparent hover:bg-slate-800'
+                  : 'bg-slate-900 text-white border-brand-500 hover:bg-slate-800'
+              }`}
+            >
               <FaBars />
               All Categories
             </button>
@@ -50,9 +63,19 @@ const CategoryNav = () => {
 
           <div className="hidden md:flex items-center gap-7 ml-7 overflow-x-auto">
             {topNav.map((item) => (
-              <Link key={item.label} to={item.to} className="text-sm text-slate-600 hover:text-brand-600 font-semibold whitespace-nowrap transition-colors">
+              <NavLink
+                key={item.label}
+                to={item.to}
+                className={({ isActive }) =>
+                  `text-sm font-semibold whitespace-nowrap transition-colors py-3 border-b-2 ${
+                    isActive
+                      ? 'text-brand-600 border-brand-500'
+                      : 'text-slate-600 border-transparent hover:text-brand-600'
+                  }`
+                }
+              >
                 {item.label}
-              </Link>
+              </NavLink>
             ))}
           </div>
         </div>

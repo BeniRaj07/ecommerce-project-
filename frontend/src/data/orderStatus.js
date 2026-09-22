@@ -57,6 +57,20 @@ export const SHIPPING_STAGE_LABELS = {
   delivered: 'Delivered',
 };
 
+// Single source of truth for the admin's one-stage-at-a-time shipping
+// action — every place that needs to render or trigger it (currently just
+// the admin order list) calls this instead of re-deriving its own copy of
+// the transition map, so there is exactly one button for exactly one valid
+// next step, or none at all outside the plain shipping flow.
+const NEXT_ORDER_ACTION = {
+  pending: { label: 'Mark to Ship', nextStatus: 'to_ship' },
+  to_ship: { label: 'Mark as Shipped', nextStatus: 'shipped' },
+  shipped: { label: 'Mark to Receive', nextStatus: 'to_receive' },
+  to_receive: { label: 'Mark as Delivered', nextStatus: 'delivered' },
+};
+
+export const getNextOrderAction = (order) => NEXT_ORDER_ACTION[order.orderStatus] || null;
+
 export const RETURN_FLOW_STATUSES = ['return_requested', 'return_approved', 'returned', 'return_rejected'];
 export const CANCEL_FLOW_STATUSES = ['cancel_requested', 'cancelled'];
 
