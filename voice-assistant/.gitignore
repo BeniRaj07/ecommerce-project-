@@ -1,0 +1,17 @@
+# Secrets
+.env
+
+# Runtime data
+data/
+logs/
+*.db
+*.db-wal
+*.db-shm
+output.wav
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
