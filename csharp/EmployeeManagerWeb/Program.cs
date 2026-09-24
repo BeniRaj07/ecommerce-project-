@@ -49,7 +49,7 @@ app.MapGet("/", () =>
 app.MapPost("/save", async (HttpRequest request) =>
 {
     var form = await request.ReadFormAsync();
-    decimal.TryParse(form["salary"], out decimal salary);
+    decimal.TryParse(form["salary"].ToString(), out decimal salary);
 
     Manager manager = new Manager(form["name"].ToString(), salary, form["department"].ToString());
     await File.WriteAllTextAsync(filePath, manager.GetInfo());
