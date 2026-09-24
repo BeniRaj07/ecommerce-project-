@@ -1,16 +1,16 @@
-# C# Employee / Manager Examples
+# C# Exercises (Set B)
 
-Two small .NET 8 projects that demonstrate inheritance with an `Employee`
-base class (`Name`, `Salary`) and a `Manager` derived class (`Department`).
+Two small .NET 8 projects.
 
-The `base` keyword is used twice in `Manager`:
+## EmployeeManagerConsole (Question 1 – OOP + File I/O)
+
+`Employee` base class (`Name`, `Salary`) and `Manager` derived class
+(`Department`). The `base` keyword is used twice in `Manager`:
 
 - `: base(name, salary)` calls the `Employee` constructor.
 - `base.GetInfo()` reuses the `Employee` output and appends the department.
 
-## EmployeeManagerConsole
-
-Creates a `Manager` object, saves its info to `employee.txt`, reads the file
+The app creates a `Manager` object, saves its info to `employee.txt`, reads the file
 back and prints it.
 
 ```bash
@@ -30,15 +30,26 @@ Salary: 85000
 Department: Sales
 ```
 
-## EmployeeManagerWeb (simple ASP.NET Core app)
+## StudentApi (ASP.NET Core Web API)
 
-A one-page ASP.NET Core minimal app. Fill in the form to create a `Manager`;
-it is saved to `employee.txt` and the page shows the contents read back from
-the file.
+A controller-based Web API for `Student` (Id, Name, Age, Course) with
+in-memory sample data. Results are returned as JSON.
+
+| Method | Route                | Description          |
+|--------|----------------------|----------------------|
+| GET    | `/api/students`      | Display all students |
+| GET    | `/api/students/{id}` | Display one student (404 if not found) |
 
 ```bash
-cd EmployeeManagerWeb
+cd StudentApi
 dotnet run
 ```
 
-Then open the URL printed in the console (e.g. `http://localhost:5000`).
+Then open the URL printed in the console, e.g. `http://localhost:5000/api/students`
+or `http://localhost:5000/api/students/1`.
+
+Sample response for `/api/students/1`:
+
+```json
+{ "id": 1, "name": "Alice", "age": 20, "course": "Computer Science" }
+```
