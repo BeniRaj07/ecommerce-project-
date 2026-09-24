@@ -1,6 +1,6 @@
 # C# Exercises (Set B)
 
-Two small .NET 8 projects.
+Two small .NET 10 projects (need the .NET 10 SDK).
 
 ## EmployeeManagerConsole (Question 1 – OOP + File I/O)
 
