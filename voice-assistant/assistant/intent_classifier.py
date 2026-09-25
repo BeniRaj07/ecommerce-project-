@@ -22,7 +22,8 @@ log = logging.getLogger(__name__)
 IntentName = Literal[
     "greeting", "weather", "football_news", "league_table", "league_results", "football_fixtures",
     "create_reminder", "list_reminders", "update_reminder", "delete_reminder",
-    "create_task", "list_tasks", "update_task", "complete_task", "delete_task", "out_of_scope",
+    "create_task", "list_tasks", "update_task", "complete_task", "delete_task", "daily_briefing",
+    "out_of_scope",
 ]
 INTENTS: tuple[str, ...] = IntentName.__args__  # type: ignore[attr-defined]
 _LEGACY = {"news_summary": "football_news", "news": "football_news", "fixtures": "football_fixtures",
@@ -190,6 +191,8 @@ Intent guide:
 - list_reminders / update_reminder (change time/title, or mark done/cancelled) / delete_reminder.
 - create_task: add something to the monthly task/to-do list ("कामको सूचीमा थप", "add ... to my tasks").
 - list_tasks, update_task (rename or change due date), complete_task ("... पूरा भयो", "mark ... done"), delete_task.
+- daily_briefing: a summary of the user's day ("what's my update", "brief me", "how does my day look",
+  "आजको अपडेट सुनाऊ", "aaja ko update"). Use list_tasks / list_reminders only for explicit lists.
 - Tasks are to-do items; reminders are timed alerts. "Remind me" is always a reminder.
 - American football (NFL, college football) is out_of_scope.
 

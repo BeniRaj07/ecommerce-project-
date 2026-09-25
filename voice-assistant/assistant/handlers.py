@@ -14,6 +14,7 @@ from assistant.response_generator import (
 )
 from config import settings
 from services import football, news, reminders, tasks, weather
+from services.http import ServiceError
 from services.reminders import ReminderError
 from services.tasks import TaskError
 
@@ -316,6 +317,19 @@ def handle_delete_task(it: IntentResult, text: str, state, now: datetime) -> Rep
     return Reply(t("task_deleted", lang, title=task.title, repeat=repeat), lang, it.intent, data_changed=True)
 
 
+def handle_daily_briefing(it: IntentResult, text: str, state, now: datetime) -> Reply:
+    from assistant.briefing import build_briefing
+    city = state.last_city or settings.hud_city
+    report, error = None, None
+    try:
+        report = weather.get_weather_report(city)
+        if report is None:
+            error = "city not found"
+    except ServiceError as e:        # the rest of the briefing still works without weather
+        error = e.user_message
+    return build_briefing(now, it.language, report, error, city)
+
+
 def handle_out_of_scope(it: IntentResult, text: str, state, now: datetime) -> Reply:
     if it.clarification:
         return Reply(it.clarification, it.language, "clarify")
@@ -330,5 +344,6 @@ HANDLERS: dict[str, Handler] = {
     "update_reminder": handle_update_reminder, "delete_reminder": handle_delete_reminder,
     "create_task": handle_create_task, "list_tasks": handle_list_tasks, "update_task": handle_update_task,
     "complete_task": handle_complete_task, "delete_task": handle_delete_task,
+    "daily_briefing": handle_daily_briefing,
     "out_of_scope": handle_out_of_scope,
 }

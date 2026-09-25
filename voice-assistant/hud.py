@@ -115,7 +115,191 @@ def head(timezone: str) -> str:
   document.addEventListener("DOMContentLoaded", tick);
 }})();
 </script>
+<script>{HANDS_FREE_JS}</script>
 """
+
+
+# ── hands-free voice controller (runs in the browser) ────────────────────────
+#
+# Browsers only allow the microphone and sound after one click on the page, so the user taps
+# ACTIVATE once. From then on:  listen → detect speech (adaptive loudness threshold) → record until
+# ~1.2 s of silence → hand the clip to the hidden #hf-file upload (same Gradio session, so follow-ups
+# work) → play the reply → listen again. Listening pauses while a reply plays so it can't hear itself.
+# All replies go through ONE audio element unlocked by the ACTIVATE tap (needed for Safari).
+
+HANDS_FREE_JS = r"""
+(function () {
+  const SILENCE_MS = 1200, MIN_SPEECH_MS = 450, MAX_SPEECH_MS = 20000, IDLE_RESTART_MS = 8000;
+  const S = { active: false, listening: false, state: "off", player: null, pending: null, autoplayed: false,
+              stream: null, ctx: null, analyser: null, rec: null, chunks: [], mime: "", recStart: 0,
+              floor: 0.01, loud: 0, speechStart: 0, lastVoice: 0, lastToken: null, busyTimer: null, restarting: false };
+  const $ = (id) => document.getElementById(id);
+  const LABEL = { listening: "LISTENING", hearing: "HEARING YOU", busy: "PROCESSING", speaking: "SPEAKING" };
+
+  function setStatus(text, mode) {
+    const el = $("awaaz-hf-status"); if (el) el.textContent = text;
+    const core = document.querySelector(".hud-core");
+    if (core) ["listening", "hearing", "speaking"].forEach((m) => core.classList.toggle(m, m === mode));
+    const cs = $("core-status"); if (cs && LABEL[mode]) cs.textContent = LABEL[mode];
+  }
+  function pickMime() {
+    if (!window.MediaRecorder) return "";
+    for (const m of ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg;codecs=opus"])
+      if (MediaRecorder.isTypeSupported(m)) return m;
+    return "";
+  }
+  function waitFor(fn, ms) {
+    return new Promise((resolve) => {
+      const t0 = Date.now();
+      (function poll() { const v = fn(); if (v || Date.now() - t0 > ms) resolve(v); else setTimeout(poll, 100); })();
+    });
+  }
+
+  // ── recording ──────────────────────────────────────────────
+  function startRecorder() {
+    if (!S.stream) return;
+    S.chunks = [];
+    try { S.rec = new MediaRecorder(S.stream, S.mime ? { mimeType: S.mime } : {}); }
+    catch (e) { S.rec = new MediaRecorder(S.stream); }
+    S.rec.ondataavailable = (e) => { if (e.data && e.data.size) S.chunks.push(e.data); };
+    S.rec.start(); S.recStart = performance.now();
+  }
+  function stopRecorder(discard) {
+    return new Promise((resolve) => {
+      const rec = S.rec; S.rec = null;
+      if (!rec || rec.state === "inactive") return resolve(null);
+      rec.onstop = () => resolve(discard ? null : new Blob(S.chunks, { type: rec.mimeType || S.mime }));
+      rec.stop();
+    });
+  }
+  function goIdle() {
+    clearTimeout(S.busyTimer);
+    if (!S.active || !S.listening) { S.state = "off"; return; }
+    S.state = "idle"; S.loud = 0;
+    stopRecorder(true).then(() => { if (S.state === "idle") startRecorder(); });
+    setStatus("Listening… just speak (नेपाली or English)", "listening");
+  }
+  async function sendBlob(blob) {
+    const ext = (blob.type || S.mime).includes("mp4") ? "m4a" : (blob.type || S.mime).includes("ogg") ? "ogg" : "webm";
+    const file = new File([blob], "utterance_" + Date.now() + "." + ext, { type: blob.type || S.mime });
+    const input = await waitFor(() => document.querySelector("#hf-file input[type=file]"), 5000);
+    if (!input) { setStatus("Could not pass the recording to the app — reload the page.", null); return goIdle(); }
+    const dt = new DataTransfer(); dt.items.add(file); input.files = dt.files;
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+    S.state = "busy"; setStatus("Thinking…", "busy");
+    S.busyTimer = setTimeout(() => { if (S.state === "busy") goIdle(); }, 90000);
+  }
+  function finishUtterance() {
+    S.state = "sending";
+    const spoke = S.lastVoice - S.speechStart;
+    stopRecorder(false).then((blob) => {
+      if (!blob || spoke < MIN_SPEECH_MS || blob.size < 1500) return goIdle();
+      sendBlob(blob);
+    });
+  }
+
+  // ── voice activity detection loop (every 50 ms) ────────────
+  function loop() {
+    if (!S.analyser) return;
+    const buf = new Float32Array(S.analyser.fftSize);
+    S.analyser.getFloatTimeDomainData(buf);
+    let sum = 0; for (let i = 0; i < buf.length; i++) sum += buf[i] * buf[i];
+    const rms = Math.sqrt(sum / buf.length), now = performance.now();
+    const lvl = $("awaaz-level"); if (lvl) lvl.style.width = Math.min(100, rms * 900) + "%";
+    const core = document.querySelector(".hud-core"); if (core) core.style.setProperty("--lvl", Math.min(1, rms * 12).toFixed(3));
+    const thr = Math.max(0.012, S.floor * 2.8);
+    if (S.state === "idle") {
+      if (rms > thr) {
+        if (++S.loud >= 3) { S.state = "hearing"; S.speechStart = now - 150; S.lastVoice = now; setStatus("Hearing you…", "hearing"); }
+      } else {
+        S.loud = 0; S.floor = S.floor * 0.97 + rms * 0.03;   // adapt to the room's background noise
+        if (now - S.recStart > IDLE_RESTART_MS && !S.restarting) {   // keep recordings short while nobody speaks
+          S.restarting = true;
+          stopRecorder(true).then(() => { S.restarting = false; if (S.state === "idle") startRecorder(); });
+        }
+      }
+    } else if (S.state === "hearing") {
+      if (rms > thr * 0.8) S.lastVoice = now;
+      if (now - S.lastVoice > SILENCE_MS || now - S.speechStart > MAX_SPEECH_MS) finishUtterance();
+    }
+  }
+
+  // ── replies from the server (#awaaz-speaker) ───────────────
+  function play(src) {
+    S.state = "speaking"; stopRecorder(true);
+    setStatus("Speaking…", "speaking");
+    S.player.onended = () => goIdle();
+    S.player.src = src;
+    S.player.play().catch(() => goIdle());
+  }
+  function onReply(src) {
+    clearTimeout(S.busyTimer);
+    if (!S.active) {                         // not activated yet: keep it, and try (the browser may allow autoplay)
+      if (!src) return;
+      S.pending = src; S.autoplayed = false;
+      const a = new Audio(src);
+      a.play().then(() => { S.autoplayed = true; }).catch(() => {});
+      return;
+    }
+    if (src) play(src); else goIdle();
+  }
+  new MutationObserver(() => {
+    const el = document.querySelector("#awaaz-speaker .awaaz-say");
+    if (!el || el.dataset.token === S.lastToken) return;
+    S.lastToken = el.dataset.token;
+    onReply(el.dataset.src || "");
+  }).observe(document.documentElement, { childList: true, subtree: true });
+
+  // ── activation (needs one tap) ─────────────────────────────
+  async function activate() {
+    if (S.active) return;
+    // Unlock audio synchronously inside the tap (Safari requires this), then set up the microphone.
+    S.player = new Audio();
+    const first = S.pending && !S.autoplayed ? S.pending : null;
+    S.player.src = first || "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQAAAAA=";
+    S.player.play().catch(() => {});
+    S.state = first ? "speaking" : "off";
+    if (first) { setStatus("Reading your daily briefing…", "speaking"); S.player.onended = () => goIdle(); }
+    try {
+      S.stream = await navigator.mediaDevices.getUserMedia(
+        { audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+    } catch (e) {
+      setStatus("Microphone blocked — allow microphone access for this site, then reload.", null); return;
+    }
+    S.ctx = new (window.AudioContext || window.webkitAudioContext)();
+    if (S.ctx.state === "suspended") await S.ctx.resume();
+    S.analyser = S.ctx.createAnalyser(); S.analyser.fftSize = 2048;
+    S.ctx.createMediaStreamSource(S.stream).connect(S.analyser);
+    S.mime = pickMime(); S.active = true; S.listening = true;
+    const act = $("awaaz-activate"), tog = $("awaaz-toggle");
+    if (act) act.style.display = "none"; if (tog) tog.style.display = "";
+    setInterval(loop, 50);
+    if (S.state !== "speaking") goIdle();
+  }
+  function toggle() {
+    S.listening = !S.listening;
+    const tog = $("awaaz-toggle");
+    if (S.listening) { if (tog) tog.textContent = "⏸ PAUSE LISTENING"; goIdle(); }
+    else { S.state = "off"; stopRecorder(true); if (tog) tog.textContent = "▶ RESUME LISTENING";
+           setStatus("Hands-free paused.", null); }
+  }
+  document.addEventListener("click", (e) => {
+    if (e.target.closest("#awaaz-activate")) activate();
+    else if (e.target.closest("#awaaz-toggle")) toggle();
+  });
+})();
+"""
+
+
+def control_panel() -> str:
+    """Static controls for the hands-free mode (the script above drives them)."""
+    return """
+<div class="awaaz-control">
+  <button id="awaaz-activate" class="awaaz-btn">⏻ ACTIVATE AWAAZ</button>
+  <button id="awaaz-toggle" class="awaaz-btn ghost" style="display:none">⏸ PAUSE LISTENING</button>
+  <div class="awaaz-meter"><i id="awaaz-level"></i></div>
+  <div id="awaaz-hf-status" class="hf-status">Tap ACTIVATE once — Awaaz reads your daily briefing, then listens hands-free.</div>
+</div>"""
 
 
 # ── CSS ──────────────────────────────────────────────────────────────────────
@@ -190,6 +374,29 @@ h1, h2, h3, h4 { font-family: 'Orbitron', sans-serif !important; letter-spacing:
 @keyframes hud-spin { to { transform: rotate(360deg); } }
 @keyframes hud-pulse { 50% { opacity: .55; transform: scale(.94); } }
 @keyframes hud-blink { 50% { opacity: .25; } }
+
+/* ── hands-free controls & listening states ───────────── */
+.awaaz-control { display: flex; flex-direction: column; align-items: center; gap: 8px; margin: -4px 0 8px; }
+.awaaz-btn { font: 700 14px 'Orbitron', sans-serif; letter-spacing: .18em; color: #01070f; cursor: pointer;
+  background: linear-gradient(90deg, #0a6f9c, #19d3ff); border: 1px solid #19d3ff; padding: 12px 28px;
+  clip-path: polygon(12px 0, 100% 0, calc(100% - 12px) 100%, 0 100%); box-shadow: 0 0 22px rgba(25,211,255,.6);
+  animation: awaaz-glow 2.2s ease-in-out infinite; }
+@keyframes awaaz-glow { 50% { box-shadow: 0 0 6px rgba(25,211,255,.3); filter: brightness(1.15); } }
+.awaaz-btn.ghost { background: rgba(25,211,255,.08); color: #19d3ff; animation: none; }
+.awaaz-meter { width: min(320px, 80%); height: 4px; background: rgba(25,211,255,.12); }
+.awaaz-meter i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #19d3ff, #39f5b0);
+  box-shadow: 0 0 8px #39f5b0; transition: width .05s linear; }
+.hf-status { font: 13px 'Share Tech Mono', monospace; color: #7de9ff; text-align: center; min-height: 18px; }
+.hud-core .core-glow { transform: scale(calc(1 + var(--lvl, 0) * .6)); }
+.hud-core.listening circle[stroke] { stroke: #19d3ff; }
+.hud-core.hearing .spin { animation-duration: 2.5s; }
+.hud-core.hearing circle, .hud-core.hearing path, .hud-core.hearing line { stroke: #39f5b0 !important; }
+.hud-core.hearing #core-status { fill: #39f5b0; }
+.hud-core.speaking .spin { animation-duration: 6s; }
+.hud-core.speaking circle, .hud-core.speaking path, .hud-core.speaking line { stroke: #7de9ff !important; }
+#hf-hidden { position: absolute !important; left: -10000px !important; width: 1px !important; height: 1px !important;
+  overflow: hidden !important; }
+#awaaz-speaker { display: none; }
 
 /* ── reminder alert ─────────────────────────────────── */
 .due-banner { border: 1px solid #ffb13b; background: rgba(255,177,59,.12); color: #ffd79a; padding: 10px 16px;
@@ -328,7 +535,7 @@ def core(status: str = "ONLINE", sub: str = "Say नमस्ते or ask me an
           style="filter:drop-shadow(0 0 8px {color})"/>
   <text x="170" y="160" text-anchor="middle" fill="#e6fbff" font-size="30" font-weight="700"
         style="filter:drop-shadow(0 0 6px {color})" data-hud="hm">--:--</text>
-  <text x="170" y="186" text-anchor="middle" fill="{color}" font-size="13" letter-spacing="4">{_esc(status)}</text>
+  <text id="core-status" x="170" y="186" text-anchor="middle" fill="{color}" font-size="13" letter-spacing="4">{_esc(status)}</text>
 </svg></div><div class="core-sub">{_esc(sub)}</div>"""
 
 

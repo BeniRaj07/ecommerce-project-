@@ -139,7 +139,18 @@ python scripts/check_setup.py
 python app.py
 ```
 
-Open **http://127.0.0.1:7860**. The interface is a futuristic HUD: a live calendar dial, a system panel,
+Open **http://127.0.0.1:7860** and tap **⏻ ACTIVATE AWAAZ** once (browsers only allow the microphone
+and sound after one click on the page). Awaaz then:
+
+1. reads your **daily briefing** — weather, tasks due today, tasks completed today, overdue tasks and
+   today's remaining reminders (`BRIEFING_LANGUAGE=ne` in `.env` for Nepali);
+2. switches to **hands-free listening** — no record/stop buttons: it detects when you start speaking,
+   stops after ~1.2 s of silence, answers out loud and listens again. Listening pauses while it speaks,
+   so it never hears itself. Use **⏸ PAUSE LISTENING** to mute it. Ask *"What's my update?"* /
+   *"आजको अपडेट सुनाऊ"* any time to hear the briefing again.
+
+Tip: use headphones or keep the speaker volume moderate; Chrome and Edge give the most reliable
+microphone handling (Safari works too). The interface is a futuristic HUD: a live calendar dial, a system panel,
 upcoming reminders, an animated core that speeds up while the assistant is thinking or listening,
 weather and monthly-task gauges, and a circular dock that switches between the four tabs. The SQLite database (`data/assistant.db`) and its tables are
 created automatically on first start. Logs are written as JSON lines to `logs/app.log`.

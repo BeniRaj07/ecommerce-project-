@@ -53,6 +53,7 @@ class Settings:
 
     # App behaviour
     timezone: str = field(default_factory=lambda: _env("APP_TIMEZONE", "Asia/Kathmandu"))
+    briefing_language: str = field(default_factory=lambda: _env("BRIEFING_LANGUAGE", "en"))  # en | ne
     hud_city: str = field(default_factory=lambda: _env("HUD_CITY", "Kathmandu"))   # weather shown on the dashboard
     db_path: Path = field(default_factory=lambda: Path(_env("DB_PATH", str(BASE_DIR / "data" / "assistant.db"))))
     audio_dir: Path = field(default_factory=lambda: Path(_env("AUDIO_DIR", str(BASE_DIR / "data" / "audio"))))

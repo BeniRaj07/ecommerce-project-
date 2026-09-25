@@ -7,13 +7,16 @@ from __future__ import annotations
 import base64
 import logging
 import time as _time
+import uuid
 from datetime import date, datetime, timedelta
+from pathlib import Path
 
 import gradio as gr
 import pandas as pd
 
 import hud
 
+from assistant.briefing import build_briefing
 from assistant.conversation import (ConversationState, clear_history, load_history, respond, run_intent,
                                     save_history)
 from assistant.intent_classifier import IntentResult
@@ -289,22 +292,46 @@ def core_busy(label: str):
 
 def core_idle(state: ConversationState | None = None):
     lang = "नेपाली" if state and state.last_language == "ne" else "English"
-    return hud.core("ONLINE", f"Tap the mic and speak · नेपाली or English · last reply in {lang}")
+    return hud.core("ONLINE", f"Hands-free: just speak · नेपाली or English · last reply in {lang}")
 
 
 # ── voice ────────────────────────────────────────────────────────────────────
 
-def voice_ask(audio_path, hint_label, state: ConversationState, vhist: list):
+def speaker_payload(audio_path: str | Path | None) -> str:
+    """Hidden element read by the browser controller (hud.HANDS_FREE_JS): a fresh token each time so
+    the browser knows a new reply arrived, plus the audio as a data URI (empty = no audio, just resume)."""
+    src = ""
+    if audio_path:
+        p = Path(audio_path)
+        mime = "audio/mpeg" if p.suffix == ".mp3" else "audio/wav"
+        src = f"data:{mime};base64,{base64.b64encode(p.read_bytes()).decode()}"
+    return f'<div class="awaaz-say" data-token="{uuid.uuid4().hex}" data-src="{src}"></div>'
+
+
+# Whisper sometimes "hears" these in silence or background noise; ignore them in hands-free mode
+WHISPER_PHANTOMS = {"", "you", "thank you", "thanks for watching", "thank you for watching",
+                    "thank you so much for watching", "bye", "subtitles by the amaraorg community"}
+
+
+def voice_ask(audio_path, hint_label, state: ConversationState, vhist: list, hands_free: bool = False):
+    """One voice turn. Yields (transcript, answer, reply audio, history, status, state, speaker)."""
     vhist = list(vhist or [])
-    yield "", "", None, vhist, "🎧 Transcribing…", state
+    skip = gr.skip()
+    yield skip, skip, skip, vhist, "🎧 Transcribing…", state, skip
     try:
         tr = transcribe(audio_path, VOICE_HINTS.get(hint_label))
     except STTError as e:
-        yield "", "", None, vhist, f"⚠️ {e.user_message}", state
+        # hands-free: silence/noise is normal, so just go back to listening quietly
+        status = "" if hands_free else f"⚠️ {e.user_message}"
+        yield skip, skip, skip, vhist, status, state, speaker_payload(None)
         return
-    yield tr.text, "", None, vhist, "🤔 Thinking…", state
+    normalized = "".join(ch for ch in tr.text.lower() if ch.isalnum() or ch == " ").strip()
+    if hands_free and normalized in WHISPER_PHANTOMS:
+        yield skip, skip, skip, vhist, "", state, speaker_payload(None)
+        return
+    yield tr.text, "", None, vhist, "🤔 Thinking…", state, skip
     reply = respond(tr.text, state)
-    yield tr.text, reply.text, None, vhist, "🔊 Generating the spoken reply…", state
+    yield tr.text, reply.text, None, vhist, "🔊 Generating the spoken reply…", state, skip
     status = ""
     audio_out = None
     try:
@@ -314,7 +341,37 @@ def voice_ask(audio_path, hint_label, state: ConversationState, vhist: list):
     vhist += [{"role": "user", "content": f"🎙️ {tr.text}"}, {"role": "assistant", "content": reply.text}]
     save_history("user", tr.text, "voice")
     save_history("assistant", reply.text, "voice")
-    yield tr.text, reply.text, audio_out, vhist, status, state
+    yield tr.text, reply.text, audio_out, vhist, status, state, speaker_payload(audio_out)
+
+
+def hands_free_ask(file_path, hint_label, state: ConversationState, vhist: list):
+    """Same turn, fed by the browser's automatic speech detection; clears the upload afterwards."""
+    for out in voice_ask(file_path, hint_label, state, vhist, hands_free=True):
+        yield (*out, gr.skip())
+    yield (*(gr.skip(),) * 7, None)
+
+
+# ── daily briefing (spoken when the page opens) ─────────────────────────────
+
+_briefing_audio: dict[str, str] = {}   # spoken text -> wav, so reloading the page doesn't spend TTS credits
+
+
+def briefing_on_open(state: ConversationState, vhist: list):
+    lang = "ne" if settings.briefing_language == "ne" else "en"
+    city = settings.hud_city
+    report, error = _hud_weather(city)
+    reply = build_briefing(datetime.now(settings.tz), lang, report, error, city)
+    audio = _briefing_audio.get(reply.spoken)
+    status = ""
+    if not (audio and Path(audio).exists()):
+        try:
+            audio = str(synthesize(reply.spoken, reply.language))
+            _briefing_audio.clear()
+            _briefing_audio[reply.spoken] = audio
+        except TTSError as e:
+            audio, status = None, f"🔇 {e.user_message}"
+    vhist = list(vhist or []) + [{"role": "assistant", "content": "📋 " + reply.text}]
+    return reply.text, audio, vhist, status, speaker_payload(audio)
 
 
 # ── football & weather tab ───────────────────────────────────────────────────
@@ -336,7 +393,7 @@ def weather_action(city: str, when: str, lang_label: str, state: ConversationSta
 
 def clear_voice():
     clear_history("voice")
-    return [], ConversationState(), "", "", None, ""
+    return [], ConversationState(), "", "", None, "", speaker_payload(None)
 
 
 def on_load(month):
@@ -378,6 +435,10 @@ def build_ui() -> gr.Blocks:
             # ── centre: reactor core + the four working tabs ─────────────
             with gr.Column(scale=3, min_width=360):
                 core = gr.HTML(hud.core())
+                gr.HTML(hud.control_panel())
+                speaker = gr.HTML(speaker_payload(None), elem_id="awaaz-speaker")
+                with gr.Column(elem_id="hf-hidden"):
+                    hf_file = gr.File(elem_id="hf-file", type="filepath", label="hands-free clip")
                 with gr.Tabs(elem_classes="hud-tabs") as tabs:
                     # ── TAB 1: voice (the only way to talk to the assistant) ─────
                     with gr.Tab("🎙️ Voice Assistant", id="voice"):
@@ -392,7 +453,7 @@ def build_ui() -> gr.Blocks:
                                 voice_status = gr.Markdown()
                             with gr.Column(scale=1):
                                 transcript = gr.Textbox(label="I heard", interactive=False)
-                                voice_audio = gr.Audio(label="Spoken reply", autoplay=True, interactive=False)
+                                voice_audio = gr.Audio(label="Spoken reply (tap ▶ to replay)", autoplay=False, interactive=False)
                                 answer = gr.Markdown(label="Answer")
                         with gr.Row():
                             with gr.Column(scale=2):
@@ -509,23 +570,25 @@ def build_ui() -> gr.Blocks:
                     .then(hud_panels, state, hud_out)
                     .then(core_idle, state, core))
 
-        clear_btn.click(clear_voice, outputs=[voice_hist, state, transcript, answer, voice_audio, voice_status]
+        clear_btn.click(clear_voice, outputs=[voice_hist, state, transcript, answer, voice_audio, voice_status, speaker]
                         ).then(core_idle, state, core)
 
         # voice events
-        voice_io = dict(fn=voice_ask, inputs=[mic, hint, state, voice_hist],
-                        outputs=[transcript, answer, voice_audio, voice_hist, voice_status, state])
+        voice_out = [transcript, answer, voice_audio, voice_hist, voice_status, state, speaker]
+        voice_io = dict(fn=voice_ask, inputs=[mic, hint, state, voice_hist], outputs=voice_out)
         after_turn(ask_btn.click(lambda: core_busy("LISTENING"), outputs=core).then(**voice_io))
 
         def maybe_auto(audio_path, hint_label, st, vh, auto):
             if not auto:
-                yield "", "", None, vh, "Recording ready — press **Ask** to send.", st
+                yield "", "", None, vh, "Recording ready — press **Ask** to send.", st, gr.skip()
                 return
             yield from voice_ask(audio_path, hint_label, st, vh)
 
         after_turn(mic.stop_recording(lambda auto: core_busy("LISTENING") if auto else gr.skip(), auto_send, core)
-                   .then(maybe_auto, [mic, hint, state, voice_hist, auto_send],
-                         [transcript, answer, voice_audio, voice_hist, voice_status, state]))
+                   .then(maybe_auto, [mic, hint, state, voice_hist, auto_send], voice_out))
+
+        # hands-free: the browser detects speech and uploads each utterance here
+        after_turn(hf_file.upload(hands_free_ask, [hf_file, hint, state, voice_hist], [*voice_out, hf_file]))
 
         # reminders
         r_add.click(add_reminder, [r_title, r_date, r_time, r_rec, month_dd], [rem_status, *dash])
@@ -559,7 +622,8 @@ def build_ui() -> gr.Blocks:
         for tid, btn in dock.items():
             btn.click(lambda t=tid: gr.Tabs(selected=t), outputs=tabs)
 
-        demo.load(on_load, month_dd, [voice_hist, state, *dash]).then(hud_panels, state, hud_out)
+        demo.load(on_load, month_dd, [voice_hist, state, *dash]).then(hud_panels, state, hud_out).then(
+            briefing_on_open, [state, voice_hist], [answer, voice_audio, voice_hist, voice_status, speaker])
     return demo
 
 

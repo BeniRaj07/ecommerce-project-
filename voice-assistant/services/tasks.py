@@ -229,3 +229,24 @@ def delete_task(task_id: int) -> bool:
     cancel_task_reminders(task_id)
     log.info("task_deleted", extra={"task_id": task_id, "recurring": task.recurring})
     return True
+
+
+# ── daily briefing helpers ───────────────────────────────────────────────────
+
+def tasks_due_on(day: date) -> list[Task]:
+    """Pending tasks whose due date is `day`."""
+    ensure_recurring_for_month(month_key(day))
+    with get_connection() as conn:
+        rows = conn.execute("SELECT * FROM tasks WHERE status = 'pending' AND due_date = ? ORDER BY id",
+                            (day.isoformat(),)).fetchall()
+    return [Task.from_row(r) for r in rows]
+
+
+def tasks_completed_on(day: date, tz=None) -> list[Task]:
+    """Tasks marked completed on `day` (in the user's local timezone)."""
+    tz = tz or settings.tz
+    with get_connection() as conn:
+        rows = conn.execute("SELECT * FROM tasks WHERE status = 'completed' AND completed_at IS NOT NULL "
+                            "ORDER BY completed_at").fetchall()
+    return [Task.from_row(r) for r in rows
+            if datetime.fromisoformat(r["completed_at"]).astimezone(tz).date() == day]
