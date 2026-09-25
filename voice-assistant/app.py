@@ -1,31 +1,37 @@
-"""Awaaz — a bilingual (नेपाली / English) voice & chat assistant with a ChatGPT-style interface.
+"""Awaaz — a bilingual (नेपाली / English) voice & chat assistant with a sci-fi HUD dashboard.
 
-Everything (greetings, reminders, monthly tasks, weather, football) is reached through ordinary
-conversation — typed or spoken — in a single chat column with a conversation-history sidebar.
-There are no separate feature tabs, dashboards or forms; see README.md for the architecture.
+Every feature (greetings, reminders, monthly tasks, weather, football) is still reached only
+through conversation — typed or spoken — in the centre chat screen; nothing is created, edited or
+deleted through a form. The Reminders and Tasks side panels, plus the clock and weather readouts,
+are read-only live views of that same data, refreshed after every turn and periodically. The full
+conversation history lives in an off-canvas drawer (☰ / ⚙ in the top bar). See README.md.
 
 Run:  python app.py      then open http://127.0.0.1:7860
 """
 from __future__ import annotations
 
 import logging
+import time as _time
 from datetime import datetime, timezone
 
 import gradio as gr
 
 import theme
 from assistant.conversation import ConversationState, respond, state_from_conversation, sync_conversation
+from assistant.response_generator import fmt_datetime, fmt_month
 from config import settings, setup_logging
 from database.stores import init_stores
 from scheduler.reminder_scheduler import start_scheduler
 from services import conversations as convo
-from services import reminders, user_settings
+from services import reminders, tasks, user_settings, weather
+from services.http import ServiceError
 from services.speech_to_text import STTError, transcribe
 from services.text_to_speech import TTSError, synthesize
 
 log = logging.getLogger("app")
 
 REMINDER_POLL_SECONDS = 15
+DASHBOARD_POLL_SECONDS = 30
 
 
 # ── shared turn logic (typed AND voice messages funnel through here) ────────
@@ -167,6 +173,61 @@ def stop_audio():
     return None
 
 
+# ── dashboard panels: reminders, tasks, weather, all reached via conversation ─
+# (read-only; every change still happens by talking to the assistant, never a form)
+
+_weather_cache: dict = {"city": None, "at": 0.0, "report": None, "error": None}
+
+
+def _cached_weather(city: str):
+    """Weather for the dashboard card; after a failure, back off for a few minutes."""
+    c = _weather_cache
+    if c["city"] == city and _time.time() - c["at"] < (180 if c["error"] else 600):
+        return c["report"], c["error"]
+    try:
+        report, error = weather.get_weather_report(city), None
+        if report is None:
+            error = "city not found"
+    except ServiceError as e:
+        report, error = None, e.user_message
+    except Exception:  # noqa: BLE001 - a dashboard widget must never break the page
+        log.warning("dashboard_weather_failed", exc_info=True)
+        report, error = None, "unavailable"
+    c.update(city=city, at=_time.time(), report=report, error=error)
+    return report, error
+
+
+def dashboard_panels(state: ConversationState | None):
+    """Read-only HTML for the two side panels. Called on load, every DASHBOARD_POLL_SECONDS,
+    and after any turn or reminder/task-affecting action so they stay live."""
+    today = tasks.today_local()
+    rems = reminders.list_reminders()[:8]
+    rem_rows = [(r.title, fmt_datetime(r.local_due) + (f" · repeats {r.recurrence}" if r.recurrence != "none" else ""),
+                "due" if r.local_due.date() == today else "")
+               for r in rems]
+    reminders_html = theme.panel("Reminders", theme.list_items(rem_rows, "No upcoming reminders"), len(rems))
+
+    month = tasks.month_key(today)
+    items = tasks.list_tasks(month)[:8]
+    prog = tasks.month_progress(month, today)
+    task_rows = [(t.title, ("due " + t.due_date if t.due_date else fmt_month(month)),
+                 "done" if t.status == "completed" else ("due" if t.due_date and t.due_date < today.isoformat() else ""))
+                for t in items]
+    tasks_body = theme.list_items(task_rows, "No tasks this month") + theme.progress_bar(fmt_month(month), prog.percent)
+
+    city = (state.last_city if state and state.last_city else settings.default_city)
+    report, error = _cached_weather(city)
+    if report is not None:
+        icon = "🌧️" if report.raining_now else "🌤️"
+        weather_html = theme.weather_card(f"{report.temperature:.0f}", weather.describe_code(report.weather_code),
+                                          report.location.name, icon)
+    else:
+        weather_html = theme.weather_card("--", error or "unavailable", city, "⚠️")
+    tasks_html = theme.panel("Tasks", tasks_body + weather_html, f"{prog.completed}/{prog.total}")
+
+    return reminders_html, tasks_html
+
+
 # ── layout ───────────────────────────────────────────────────────────────────
 
 def build_ui() -> gr.Blocks:
@@ -178,7 +239,7 @@ def build_ui() -> gr.Blocks:
         search_q = gr.State("")
 
         # Created here (not yet placed) so the sidebar's event handlers, defined below, can target
-        # them; `.render()` places each one in the main column further down.
+        # them; `.render()` places each one in the dashboard further down.
         chatbot = gr.Chatbot(elem_id="chatbot", show_label=False, buttons=["copy"],
                              placeholder=theme.welcome_html(), render=False)
         status_line = gr.Markdown("", elem_id="status-line", render=False)
@@ -189,10 +250,15 @@ def build_ui() -> gr.Blocks:
                              container=False, scale=8, lines=1, max_lines=6, render=False)
         send_btn = gr.Button("➤", elem_id="send-btn", scale=0, render=False)
         mic_upload = gr.File(elem_id="mic-upload", file_types=["audio"], render=False)
+        reminders_panel = gr.HTML(render=False)
+        tasks_panel = gr.HTML(render=False)
 
-        with gr.Row(elem_id="app-root"):
-            # ── sidebar ──────────────────────────────────────────────────
-            with gr.Column(elem_id="sidebar", scale=0, min_width=272):
+        with gr.Column(elem_id="app-root"):
+            gr.HTML(theme.topbar_html())
+
+            # off-canvas conversation drawer (opened by the ☰ / ⚙ buttons in the top bar)
+            gr.HTML('<div id="scrim" onclick="awaazToggleSidebar()"></div>')
+            with gr.Column(elem_id="sidebar"):
                 gr.HTML(theme.sidebar_header_html())
                 new_chat_btn = gr.Button("＋ New chat", elem_id="new-chat-btn")
                 search_box = gr.Textbox(placeholder="🔍 Search conversations", show_label=False,
@@ -230,29 +296,39 @@ def build_ui() -> gr.Blocks:
                     autoplay_cb = gr.Checkbox(value=lambda: user_settings.get_settings().auto_play,
                                               label="🔊 Auto-play replies", container=False)
 
-            # ── main chat column ────────────────────────────────────────
-            with gr.Column(elem_id="main-col"):
-                gr.HTML(theme.mobile_topbar_html())
-                chatbot.render()
-                status_line.render()
-                gr.HTML(theme.rec_indicator_html())
-                gr.HTML('<div id="mic-status"></div>')
-                with gr.Row(elem_id="audio-row"):
-                    audio_out.render()
-                    stop_audio_btn.render()
-                with gr.Column(elem_id="composer-wrap"):
-                    with gr.Row(elem_id="composer"):
-                        gr.HTML('<button class="mic-btn" onclick="awaazMicTap()" title="Tap to speak">🎤</button>')
-                        text_in.render()
-                        send_btn.render()
-                mic_upload.render()
+            # ── dashboard: reminders | chat screen | tasks + weather ──────
+            with gr.Row(elem_id="dashboard"):
+                reminders_panel.render()
+
+                with gr.Column(elem_id="center-screen"):
+                    chatbot.render()
+                    status_line.render()
+                    gr.HTML(theme.rec_indicator_html())
+                    gr.HTML('<div id="mic-status"></div>')
+                    with gr.Row(elem_id="audio-row"):
+                        audio_out.render()
+                        stop_audio_btn.render()
+                    with gr.Column(elem_id="composer-wrap"):
+                        gr.HTML(theme.reticle_html())
+                        with gr.Row(elem_id="composer"):
+                            gr.HTML('<button class="mic-btn" onclick="awaazMicTap()" title="Tap to speak">🎤</button>')
+                            text_in.render()
+                            send_btn.render()
+                    mic_upload.render()
+
+                tasks_panel.render()
 
         # ── events ───────────────────────────────────────────────────────
         turn_outputs = [chatbot, active_id, convo_state, text_in, status_line, audio_out, conv_list]
-        text_in.submit(text_turn, [text_in, chatbot, active_id, convo_state, autoplay_cb], turn_outputs)
-        send_btn.click(text_turn, [text_in, chatbot, active_id, convo_state, autoplay_cb], turn_outputs)
+        dashboard_outputs = [reminders_panel, tasks_panel]
+
+        text_in.submit(text_turn, [text_in, chatbot, active_id, convo_state, autoplay_cb], turn_outputs
+                       ).then(dashboard_panels, convo_state, dashboard_outputs)
+        send_btn.click(text_turn, [text_in, chatbot, active_id, convo_state, autoplay_cb], turn_outputs
+                      ).then(dashboard_panels, convo_state, dashboard_outputs)
         mic_upload.upload(voice_turn, [mic_upload, chatbot, active_id, convo_state, autoplay_cb],
-                          [*turn_outputs, mic_upload])
+                          [*turn_outputs, mic_upload]
+                         ).then(dashboard_panels, convo_state, dashboard_outputs)
 
         new_chat_btn.click(start_new_chat, outputs=[chatbot, active_id, convo_state, text_in])
         search_box.input(lambda q: q, search_box, search_q)
@@ -269,9 +345,12 @@ def build_ui() -> gr.Blocks:
 
         gr.Timer(REMINDER_POLL_SECONDS).tick(
             poll_due_reminders, [chatbot, active_id, convo_state, autoplay_cb],
-            [chatbot, active_id, convo_state, audio_out, conv_list])
+            [chatbot, active_id, convo_state, audio_out, conv_list]
+        ).then(dashboard_panels, convo_state, dashboard_outputs)
+        gr.Timer(DASHBOARD_POLL_SECONDS).tick(dashboard_panels, convo_state, dashboard_outputs)
 
-        demo.load(lambda: convo.list_conversations(), outputs=conv_list)
+        demo.load(lambda: convo.list_conversations(), outputs=conv_list
+                 ).then(dashboard_panels, convo_state, dashboard_outputs)
     return demo
 
 
