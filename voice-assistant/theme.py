@@ -110,6 +110,9 @@ footer { display: none !important; }
 #chatbot .message.user { background: var(--surface) !important; border: 1px solid var(--border) !important;
   border-radius: 16px !important; }
 #chatbot .message.bot { background: transparent !important; border: none !important; }
+/* Wide tables (league standings, results) scroll horizontally instead of crushing on narrow screens */
+#chatbot table { display: block; overflow-x: auto; white-space: nowrap; max-width: 100%; }
+#chatbot table td, #chatbot table th { white-space: nowrap; }
 #status-line { max-width: 820px; margin: -6px auto 0; padding: 0 24px; min-height: 20px;
   font-size: .85rem; color: var(--muted); }
 #status-line:not(:empty) { animation: pulse-text 1.4s ease-in-out infinite; }
