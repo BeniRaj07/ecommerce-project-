@@ -249,7 +249,9 @@ def build_ui() -> gr.Blocks:
         text_in = gr.Textbox(placeholder="Message Awaaz…", show_label=False, elem_id="composer-input",
                              container=False, scale=8, lines=1, max_lines=6, render=False)
         send_btn = gr.Button("➤", elem_id="send-btn", scale=0, render=False)
-        mic_upload = gr.File(elem_id="mic-upload", file_types=["audio"], render=False)
+        # No file_types filter: the browser's extension→MIME lookup classifies
+        # ".webm" as video, so an "audio"-only filter rejects our own recordings.
+        mic_upload = gr.File(elem_id="mic-upload", render=False)
         reminders_panel = gr.HTML(render=False)
         tasks_panel = gr.HTML(render=False)
 
