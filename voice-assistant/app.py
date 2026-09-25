@@ -12,6 +12,8 @@ from datetime import date, datetime, timedelta
 import gradio as gr
 import pandas as pd
 
+import hud
+
 from assistant.conversation import (ConversationState, clear_history, load_history, respond, run_intent,
                                     save_history)
 from assistant.intent_classifier import IntentResult
@@ -19,7 +21,8 @@ from assistant.response_generator import fmt_datetime, fmt_month
 from config import settings, setup_logging
 from database.db import init_db
 from scheduler.reminder_scheduler import start_scheduler
-from services import football, reminders, tasks
+from services import football, reminders, tasks, weather
+from services.http import ServiceError
 from services.reminders import ReminderError
 from services.speech_to_text import STTError, transcribe
 from services.tasks import TaskError
@@ -225,12 +228,68 @@ def poll_notifications(sound_on: bool, month: str):
     fired = reminders.pop_unseen_notifications()
     if not fired:
         return (gr.skip(),) * 9
-    items = "".join(f"<li><b>{n.title}</b> <span>due {fmt_datetime(n.due_at.astimezone(settings.tz))}</span></li>"
-                    for n in fired)
-    banner = f'<div class="due-banner">🔔 <b>Reminder{"s" if len(fired) > 1 else ""} due</b><ul>{items}</ul></div>'
-    if sound_on:
-        banner += _chime_tag()
+    banner = hud.alert_banner([(n.title, fmt_datetime(n.due_at.astimezone(settings.tz))) for n in fired],
+                              _chime_tag() if sound_on else "")
     return (banner, *dashboard(month))
+
+
+# ── HUD side panels ──────────────────────────────────────────────────────────
+
+_weather_cache: dict = {"city": None, "at": 0.0, "report": None, "error": None}
+
+
+def _hud_weather(city: str):
+    """Weather for the dashboard gauge; after a failure, wait 5 minutes before trying again."""
+    c = _weather_cache
+    if c["city"] == city and _time.time() - c["at"] < (300 if c["error"] else 600):
+        return c["report"], c["error"]
+    try:
+        report, error = weather.get_weather_report(city), None
+        if report is None:
+            error = "CITY NOT FOUND"
+    except ServiceError as e:
+        report, error = None, e.user_message.upper()
+    except Exception:  # noqa: BLE001 - a dashboard widget must never break the page
+        log.warning("hud_weather_failed", exc_info=True)
+        report, error = None, "UNAVAILABLE"
+    c.update(city=city, at=_time.time(), report=report, error=error)
+    return report, error
+
+
+def hud_panels(state: ConversationState | None):
+    d = today()
+    rems = reminders.list_reminders()
+    prog = tasks.month_progress(tasks.month_key(d), d)
+    overdue = len(tasks.overdue_tasks(d))
+    fired = reminders.recent_notifications(5)
+    todays = [r for r in rems if r.local_due.date() == d]
+    system = hud.system_panel([
+        ("REMINDERS", min(len(rems) / 10, 1), str(len(rems)), False),
+        ("DUE TODAY", min(len(todays) / 5, 1), str(len(todays)), bool(todays)),
+        ("TASKS DONE", prog.percent / 100, f"{prog.percent}%", False),
+        ("PENDING", prog.pending / prog.total if prog.total else 0, str(prog.pending), False),
+        ("OVERDUE", min(overdue / 5, 1), str(overdue), overdue > 0),
+    ])
+    upcoming = hud.list_panel("UPCOMING", [(r.title, fmt_datetime(r.local_due) + (" · " + r.recurrence if r.recurrence != "none" else ""))
+                                           for r in rems[:5]], "No upcoming reminders")
+    activity = hud.list_panel("ALERT LOG", [(n.title, "fired " + fmt_datetime(n.due_at.astimezone(settings.tz)))
+                                            for n in fired], "No reminders have fired yet")
+    city = (state.last_city if state and state.last_city else settings.hud_city)
+    report, error = _hud_weather(city)
+    task_gauge = hud.gauge("MONTHLY TASKS", str(prog.percent), prog.percent / 100,
+                           [fmt_month(prog.month).upper(), f"{prog.completed}/{prog.total} COMPLETE",
+                            f"{overdue} OVERDUE" if overdue else "ON TRACK"], unit="%")
+    return (hud.ruler(d), hud.date_ring(d), system, upcoming, hud.weather_gauge(report, city, error),
+            task_gauge, activity)
+
+
+def core_busy(label: str):
+    return hud.core(label, "Working on it…", busy=True)
+
+
+def core_idle(state: ConversationState | None = None):
+    lang = "नेपाली" if state and state.last_language == "ne" else "English"
+    return hud.core("ONLINE", f"Last language: {lang} · Say नमस्ते or ask me anything")
 
 
 # ── chat ─────────────────────────────────────────────────────────────────────
@@ -314,35 +373,6 @@ def on_load(month):
 
 # ── layout ───────────────────────────────────────────────────────────────────
 
-CSS = """
-.app-header { display:flex; align-items:center; gap:16px; padding:18px 22px; border-radius:16px; margin-bottom:6px;
-  background: linear-gradient(120deg, #4c1d95, #1e40af 60%, #0e7490); color:#fff; }
-.app-header h1 { margin:0; font-size:1.7rem; color:#fff !important; }
-.app-header p { margin:2px 0 0; color:#e0e7ff !important; }
-.app-header .logo { font-size:2.4rem; }
-.due-banner { background:#fef3c7; color:#78350f; border:1px solid #f59e0b; border-radius:12px; padding:10px 16px;
-  animation: pop .4s ease; }
-.due-banner ul { margin:4px 0 0 18px; } .due-banner span { opacity:.8; font-size:.9em; }
-@keyframes pop { from { transform: scale(.97); opacity:.3 } to { transform: scale(1); opacity:1 } }
-.progress-card { border:1px solid var(--border-color-primary); border-radius:12px; padding:12px 14px; }
-.progress-top { display:flex; justify-content:space-between; flex-wrap:wrap; gap:6px; font-size:.95rem; }
-.bar { height:12px; background:var(--neutral-200); border-radius:99px; overflow:hidden; margin-top:8px; }
-.bar > div { height:100%; background:linear-gradient(90deg,#7c3aed,#06b6d4); border-radius:99px; transition:width .4s; }
-.pct { text-align:right; font-weight:700; margin-top:4px; }
-.note { font-size:.88rem; opacity:.85; }
-footer { display:none !important; }
-"""
-
-HEADER = """
-<div class="app-header">
-  <div class="logo">🎙️</div>
-  <div>
-    <h1>Awaaz AI</h1>
-    <p>Bilingual (नेपाली / English) voice &amp; chat assistant for reminders, monthly tasks, weather and football</p>
-  </div>
-</div>
-"""
-
 CHAT_EXAMPLES = [
     "नमस्ते! तपाईंलाई कस्तो छ?",
     "Remind me to submit my assignment tomorrow at 8 PM",
@@ -359,145 +389,176 @@ def build_ui() -> gr.Blocks:
         state = gr.State(ConversationState())
         last_reply = gr.State(None)
 
-        gr.HTML(HEADER)
+        ruler = gr.HTML(hud.ruler(today()))
+        gr.HTML(hud.title_bar(settings.timezone))
         banner = gr.HTML("")
-        with gr.Row():
-            dismiss_btn = gr.Button("Dismiss reminder alerts", size="sm", scale=0, min_width=200)
-            sound_cb = gr.Checkbox(value=True, label="🔔 Play a sound when a reminder is due", scale=1)
 
-        with gr.Tabs():
-            # ── TAB 1: chat ──────────────────────────────────────────────
-            with gr.Tab("💬 AI Chat"):
-                chatbot = gr.Chatbot(height=460, label="Conversation", buttons=["copy"],
-                                     placeholder="Ask in English, नेपाली or Romanized Nepali — e.g. "
-                                                 "<i>mero reminder dekhau</i>")
-                with gr.Row():
-                    chat_in = gr.Textbox(placeholder="Type your message… (Enter to send)", show_label=False,
-                                         scale=5, lines=1, max_lines=4, container=False)
-                    send_btn = gr.Button("Send ➤", variant="primary", scale=1, min_width=100)
-                gr.Examples(CHAT_EXAMPLES, inputs=chat_in, label="Try an example")
-                with gr.Row():
-                    listen_btn = gr.Button("🔊 Listen to last reply")
-                    clear_btn = gr.Button("🗑️ Clear chat history")
-                listen_audio = gr.Audio(label="Spoken reply", autoplay=True, interactive=False)
-                listen_status = gr.Markdown()
+        with gr.Row(equal_height=False):
+            # ── left HUD column ───────────────────────────────────────────
+            with gr.Column(scale=1, min_width=250):
+                hud_date = gr.HTML(hud.date_ring(today()))
+                hud_system = gr.HTML()
+                hud_upcoming = gr.HTML()
+                sound_cb = gr.Checkbox(value=True, label="🔔 Chime when a reminder is due")
+                dismiss_btn = gr.Button("Dismiss alerts", size="sm")
 
-            # ── TAB 2: voice ─────────────────────────────────────────────
-            with gr.Tab("🎙️ Voice Assistant"):
-                with gr.Row():
-                    with gr.Column(scale=1):
-                        mic = gr.Audio(sources=["microphone", "upload"], type="filepath",
-                                       label="Record or upload a question")
-                        hint = gr.Radio(list(VOICE_HINTS), value="Auto-detect", label="Spoken language",
-                                        info="Choose नेपाली if Nepali speech is transcribed as Hindi.")
-                        auto_send = gr.Checkbox(value=True, label="Send automatically when I stop recording")
-                        ask_btn = gr.Button("🎤 Ask", variant="primary")
-                        voice_status = gr.Markdown()
-                    with gr.Column(scale=1):
-                        transcript = gr.Textbox(label="I heard", interactive=False)
-                        answer = gr.Markdown(label="Answer")
-                        voice_audio = gr.Audio(label="Spoken reply", autoplay=True, interactive=False)
-                voice_hist = gr.Chatbot(height=300, label="Voice interaction history")
-
-            # ── TAB 3: reminders & tasks ─────────────────────────────────
-            with gr.Tab("⏰ Reminders & Monthly Tasks"):
-                gr.Markdown(NOT_RUNNING_NOTE, elem_classes="note")
-                with gr.Row():
-                    # reminders
-                    with gr.Column(scale=1):
-                        gr.Markdown(f"### ⏰ Upcoming reminders  \n<span class='note'>Timezone: {settings.timezone}</span>")
-                        rem_table = gr.Dataframe(interactive=False, wrap=True)
-                        with gr.Accordion("➕ Add a reminder", open=False):
-                            r_title = gr.Textbox(label="What should I remind you about?")
-                            with gr.Row():
-                                r_date = gr.Textbox(label="Date (YYYY-MM-DD)", value=lambda: today().isoformat())
-                                r_time = gr.Textbox(label="Time (HH:MM, 24h)", placeholder="20:00")
-                            r_rec = gr.Dropdown(list(RECURRENCE_CHOICES), value="One time", label="Repeats")
-                            r_add = gr.Button("Save reminder", variant="primary")
-                        with gr.Accordion("✏️ Manage a reminder", open=False):
-                            r_pick = gr.Dropdown(label="Reminder", choices=[])
-                            with gr.Row():
-                                r_new_title = gr.Textbox(label="New title (optional)")
-                                r_new_date = gr.Textbox(label="New date (optional)")
-                                r_new_time = gr.Textbox(label="New time (optional)")
-                            r_new_rec = gr.Dropdown([""] + list(RECURRENCE_CHOICES), value="", label="New repeat (optional)")
-                            with gr.Row():
-                                r_save = gr.Button("Save changes")
-                                r_done = gr.Button("✅ Mark done")
-                                r_cancel = gr.Button("🚫 Cancel")
-                                r_delete = gr.Button("🗑️ Delete", variant="stop")
-                        rem_status = gr.Markdown()
-                        gr.Markdown("#### 🔔 Recently fired")
-                        notif_md = gr.Markdown()
-                    # tasks
-                    with gr.Column(scale=1):
-                        gr.Markdown("### 📝 Monthly tasks")
-                        month_dd = gr.Dropdown(month_choices(), value=lambda: tasks.month_key(today()), label="Month")
-                        progress = gr.HTML()
-                        with gr.Tabs():
-                            with gr.Tab("⬜ Pending"):
-                                pending_table = gr.Dataframe(interactive=False, wrap=True)
-                            with gr.Tab("✅ Completed"):
-                                done_table = gr.Dataframe(interactive=False, wrap=True)
-                            with gr.Tab("⚠️ Overdue (all months)"):
-                                overdue_table = gr.Dataframe(interactive=False, wrap=True)
-                        with gr.Accordion("➕ Add a task", open=False):
-                            t_title = gr.Textbox(label="Task")
-                            t_desc = gr.Textbox(label="Description (optional)")
-                            with gr.Row():
-                                t_due = gr.Textbox(label="Due date (optional, YYYY-MM-DD)")
-                                t_remind = gr.Textbox(label="Also remind me at (optional HH:MM)")
-                            t_rec = gr.Checkbox(label="🔁 Recurring every month")
-                            t_add = gr.Button("Add task", variant="primary")
-                        with gr.Accordion("✏️ Manage a task", open=False):
-                            t_pick = gr.Dropdown(label="Task", choices=[])
-                            with gr.Row():
-                                t_new_title = gr.Textbox(label="New title (optional)")
-                                t_new_due = gr.Textbox(label="New due date (optional)")
-                            with gr.Row():
-                                t_complete = gr.Button("✅ Complete")
-                                t_reopen = gr.Button("↩️ Reopen")
-                                t_save = gr.Button("Save changes")
-                                t_delete = gr.Button("🗑️ Delete", variant="stop")
-                        task_status = gr.Markdown()
-
-            # ── TAB 4: football & weather ────────────────────────────────
-            with gr.Tab("⚽ Football & 🌤️ Weather"):
-                with gr.Row():
-                    with gr.Column(scale=3):
-                        gr.Markdown("### ⚽ Football (soccer)")
+            # ── centre: reactor core + the four working tabs ─────────────
+            with gr.Column(scale=3, min_width=360):
+                core = gr.HTML(hud.core())
+                with gr.Tabs(elem_classes="hud-tabs") as tabs:
+                    # ── TAB 1: chat ──────────────────────────────────────────────
+                    with gr.Tab("💬 AI Chat", id="chat"):
+                        chatbot = gr.Chatbot(height=460, show_label=False, buttons=["copy"],
+                                             placeholder="Ask in English, नेपाली or Romanized Nepali — e.g. "
+                                                         "<i>mero reminder dekhau</i>")
                         with gr.Row():
-                            league = gr.Dropdown(LEAGUE_CHOICES, value="PL", label="Competition")
-                            team = gr.Textbox(label="Team (optional)", placeholder="e.g. Barcelona")
-                            f_lang = gr.Radio(list(LANG_CHOICES), value="English", label="Language")
+                            chat_in = gr.Textbox(placeholder="Type your message… (Enter to send)", show_label=False,
+                                                 scale=5, lines=1, max_lines=4, container=False)
+                            send_btn = gr.Button("Send ➤", variant="primary", scale=1, min_width=100)
+                        gr.Examples(CHAT_EXAMPLES, inputs=chat_in, label="Try an example")
                         with gr.Row():
-                            news_btn = gr.Button("📰 Latest news")
-                            table_btn = gr.Button("🏆 Standings")
-                            results_btn = gr.Button("📊 Recent results")
-                            fixtures_btn = gr.Button("📅 Upcoming matches")
-                        football_out = gr.Markdown("_Choose a competition and press a button._")
-                    with gr.Column(scale=2):
-                        gr.Markdown("### 🌤️ Weather")
-                        city = gr.Textbox(label="City", value="Kathmandu")
+                            listen_btn = gr.Button("🔊 Listen to last reply")
+                            clear_btn = gr.Button("🗑️ Clear chat history")
+                        listen_audio = gr.Audio(label="Spoken reply", autoplay=True, interactive=False)
+                        listen_status = gr.Markdown()
+
+                    # ── TAB 2: voice ─────────────────────────────────────────────
+                    with gr.Tab("🎙️ Voice", id="voice"):
                         with gr.Row():
-                            when = gr.Radio(["Now", "Tomorrow", "In 2 days"], value="Now", label="When")
-                            w_lang = gr.Radio(list(LANG_CHOICES), value="English", label="Language")
-                        weather_btn = gr.Button("Get weather", variant="primary")
-                        weather_out = gr.Markdown()
+                            with gr.Column(scale=1):
+                                mic = gr.Audio(sources=["microphone", "upload"], type="filepath",
+                                               label="Record or upload a question")
+                                hint = gr.Radio(list(VOICE_HINTS), value="Auto-detect", label="Spoken language",
+                                                info="Choose नेपाली if Nepali speech is transcribed as Hindi.")
+                                auto_send = gr.Checkbox(value=True, label="Send automatically when I stop recording")
+                                ask_btn = gr.Button("🎤 Ask", variant="primary")
+                                voice_status = gr.Markdown()
+                            with gr.Column(scale=1):
+                                transcript = gr.Textbox(label="I heard", interactive=False)
+                                answer = gr.Markdown(label="Answer")
+                                voice_audio = gr.Audio(label="Spoken reply", autoplay=True, interactive=False)
+                        voice_hist = gr.Chatbot(height=300, label="Voice interaction history")
+
+                    # ── TAB 3: reminders & tasks ─────────────────────────────────
+                    with gr.Tab("⏰ Reminders & Tasks", id="plan"):
+                        gr.Markdown(NOT_RUNNING_NOTE, elem_classes="note")
+                        with gr.Row():
+                            # reminders
+                            with gr.Column(scale=1):
+                                gr.Markdown(f"### ⏰ Upcoming reminders  \n<span class='note'>Timezone: {settings.timezone}</span>")
+                                rem_table = gr.Dataframe(interactive=False, wrap=True)
+                                with gr.Accordion("➕ Add a reminder", open=False):
+                                    r_title = gr.Textbox(label="What should I remind you about?")
+                                    with gr.Row():
+                                        r_date = gr.Textbox(label="Date (YYYY-MM-DD)", value=lambda: today().isoformat())
+                                        r_time = gr.Textbox(label="Time (HH:MM, 24h)", placeholder="20:00")
+                                    r_rec = gr.Dropdown(list(RECURRENCE_CHOICES), value="One time", label="Repeats")
+                                    r_add = gr.Button("Save reminder", variant="primary")
+                                with gr.Accordion("✏️ Manage a reminder", open=False):
+                                    r_pick = gr.Dropdown(label="Reminder", choices=[])
+                                    with gr.Row():
+                                        r_new_title = gr.Textbox(label="New title (optional)")
+                                        r_new_date = gr.Textbox(label="New date (optional)")
+                                        r_new_time = gr.Textbox(label="New time (optional)")
+                                    r_new_rec = gr.Dropdown([""] + list(RECURRENCE_CHOICES), value="", label="New repeat (optional)")
+                                    with gr.Row():
+                                        r_save = gr.Button("Save changes")
+                                        r_done = gr.Button("✅ Mark done")
+                                        r_cancel = gr.Button("🚫 Cancel")
+                                        r_delete = gr.Button("🗑️ Delete", variant="stop")
+                                rem_status = gr.Markdown()
+                                gr.Markdown("#### 🔔 Recently fired")
+                                notif_md = gr.Markdown()
+                            # tasks
+                            with gr.Column(scale=1):
+                                gr.Markdown("### 📝 Monthly tasks")
+                                month_dd = gr.Dropdown(month_choices(), value=lambda: tasks.month_key(today()), label="Month")
+                                progress = gr.HTML()
+                                with gr.Tabs():
+                                    with gr.Tab("⬜ Pending"):
+                                        pending_table = gr.Dataframe(interactive=False, wrap=True)
+                                    with gr.Tab("✅ Completed"):
+                                        done_table = gr.Dataframe(interactive=False, wrap=True)
+                                    with gr.Tab("⚠️ Overdue (all months)"):
+                                        overdue_table = gr.Dataframe(interactive=False, wrap=True)
+                                with gr.Accordion("➕ Add a task", open=False):
+                                    t_title = gr.Textbox(label="Task")
+                                    t_desc = gr.Textbox(label="Description (optional)")
+                                    with gr.Row():
+                                        t_due = gr.Textbox(label="Due date (optional, YYYY-MM-DD)")
+                                        t_remind = gr.Textbox(label="Also remind me at (optional HH:MM)")
+                                    t_rec = gr.Checkbox(label="🔁 Recurring every month")
+                                    t_add = gr.Button("Add task", variant="primary")
+                                with gr.Accordion("✏️ Manage a task", open=False):
+                                    t_pick = gr.Dropdown(label="Task", choices=[])
+                                    with gr.Row():
+                                        t_new_title = gr.Textbox(label="New title (optional)")
+                                        t_new_due = gr.Textbox(label="New due date (optional)")
+                                    with gr.Row():
+                                        t_complete = gr.Button("✅ Complete")
+                                        t_reopen = gr.Button("↩️ Reopen")
+                                        t_save = gr.Button("Save changes")
+                                        t_delete = gr.Button("🗑️ Delete", variant="stop")
+                                task_status = gr.Markdown()
+
+                    # ── TAB 4: football & weather ────────────────────────────────
+                    with gr.Tab("⚽ Football & Weather", id="world"):
+                        with gr.Row():
+                            with gr.Column(scale=3):
+                                gr.Markdown("### ⚽ Football (soccer)")
+                                with gr.Row():
+                                    league = gr.Dropdown(LEAGUE_CHOICES, value="PL", label="Competition")
+                                    team = gr.Textbox(label="Team (optional)", placeholder="e.g. Barcelona")
+                                    f_lang = gr.Radio(list(LANG_CHOICES), value="English", label="Language")
+                                with gr.Row():
+                                    news_btn = gr.Button("📰 Latest news")
+                                    table_btn = gr.Button("🏆 Standings")
+                                    results_btn = gr.Button("📊 Recent results")
+                                    fixtures_btn = gr.Button("📅 Upcoming matches")
+                                football_out = gr.Markdown("_Choose a competition and press a button._")
+                            with gr.Column(scale=2):
+                                gr.Markdown("### 🌤️ Weather")
+                                city = gr.Textbox(label="City", value="Kathmandu")
+                                with gr.Row():
+                                    when = gr.Radio(["Now", "Tomorrow", "In 2 days"], value="Now", label="When")
+                                    w_lang = gr.Radio(list(LANG_CHOICES), value="English", label="Language")
+                                weather_btn = gr.Button("Get weather", variant="primary")
+                                weather_out = gr.Markdown()
+
+
+            # ── right HUD column ──────────────────────────────────────────
+            with gr.Column(scale=1, min_width=250):
+                hud_weather = gr.HTML()
+                hud_tasks = gr.HTML()
+                hud_log = gr.HTML()
+
+        # ── circular dock (switches tabs) ─────────────────────────────────
+        with gr.Row(elem_classes="hud-dock"):
+            dock = {tid: gr.Button(label, elem_classes="dock-btn") for tid, label in (
+                ("chat", "💬\nCHAT"), ("voice", "🎙️\nVOICE"), ("plan", "⏰\nPLAN"), ("world", "🌐\nWORLD"))}
+            dock_listen = gr.Button("🔊\nLISTEN", elem_classes="dock-btn")
 
         dash = [rem_table, r_pick, notif_md, progress, pending_table, done_table, overdue_table, t_pick]
+        hud_out = [ruler, hud_date, hud_system, hud_upcoming, hud_weather, hud_tasks, hud_log]
+
+        def after_turn(event):
+            """Refresh the dashboard and HUD, then calm the reactor core down again."""
+            return (event.then(dashboard, month_dd, dash)
+                    .then(hud_panels, state, hud_out)
+                    .then(core_idle, state, core))
 
         # chat events
         chat_io = dict(fn=chat_send, inputs=[chat_in, chatbot, state], outputs=[chatbot, chat_in, state, last_reply])
-        chat_in.submit(**chat_io).then(dashboard, month_dd, dash)
-        send_btn.click(**chat_io).then(dashboard, month_dd, dash)
+        for trigger in (chat_in.submit, send_btn.click):
+            after_turn(trigger(lambda: core_busy("PROCESSING"), outputs=core).then(**chat_io))
         listen_btn.click(listen_last, last_reply, [listen_audio, listen_status])
-        clear_btn.click(clear_chat, outputs=[chatbot, state, last_reply, voice_hist, listen_audio, listen_status])
+        clear_btn.click(clear_chat, outputs=[chatbot, state, last_reply, voice_hist, listen_audio, listen_status]
+                        ).then(core_idle, state, core)
 
         # voice events
         voice_io = dict(fn=voice_ask, inputs=[mic, hint, state, voice_hist],
                         outputs=[transcript, answer, voice_audio, voice_hist, voice_status, state])
-        ask_btn.click(**voice_io).then(dashboard, month_dd, dash)
+        after_turn(ask_btn.click(lambda: core_busy("LISTENING"), outputs=core).then(**voice_io))
 
         def maybe_auto(audio_path, hint_label, st, vh, auto):
             if not auto:
@@ -505,9 +566,9 @@ def build_ui() -> gr.Blocks:
                 return
             yield from voice_ask(audio_path, hint_label, st, vh)
 
-        mic.stop_recording(maybe_auto, [mic, hint, state, voice_hist, auto_send],
-                           [transcript, answer, voice_audio, voice_hist, voice_status, state]
-                           ).then(dashboard, month_dd, dash)
+        after_turn(mic.stop_recording(lambda auto: core_busy("LISTENING") if auto else gr.skip(), auto_send, core)
+                   .then(maybe_auto, [mic, hint, state, voice_hist, auto_send],
+                         [transcript, answer, voice_audio, voice_hist, voice_status, state]))
 
         # reminders
         r_add.click(add_reminder, [r_title, r_date, r_time, r_rec, month_dd], [rem_status, *dash])
@@ -529,11 +590,21 @@ def build_ui() -> gr.Blocks:
         weather_btn.click(weather_action, [city, when, w_lang, state], weather_out)
         city.submit(weather_action, [city, when, w_lang, state], weather_out)
 
-        # due reminders: poll every 10 s while the page is open
+        # due reminders: poll every 10 s while the page is open; HUD panels every 30 s
         gr.Timer(10).tick(poll_notifications, [sound_cb, month_dd], [banner, *dash])
+        gr.Timer(30).tick(hud_panels, state, hud_out)
         dismiss_btn.click(lambda: "", outputs=banner)
+        for task_btn in (r_add, r_save, r_done, r_cancel, r_delete, t_add, t_complete, t_reopen, t_save, t_delete):
+            task_btn.click(hud_panels, state, hud_out)
+        weather_btn.click(hud_panels, state, hud_out)
 
-        demo.load(on_load, month_dd, [chatbot, voice_hist, state, *dash])
+        # dock
+        for tid, btn in dock.items():
+            btn.click(lambda t=tid: gr.Tabs(selected=t), outputs=tabs)
+        dock_listen.click(listen_last, last_reply, [listen_audio, listen_status]).then(
+            lambda: gr.Tabs(selected="chat"), outputs=tabs)
+
+        demo.load(on_load, month_dd, [chatbot, voice_hist, state, *dash]).then(hud_panels, state, hud_out)
     return demo
 
 
@@ -545,7 +616,7 @@ def main() -> None:
     auth = tuple(settings.app_auth.split(":", 1)) if ":" in settings.app_auth else None
     build_ui().queue().launch(
         server_name=settings.server_host, server_port=settings.server_port, auth=auth,
-        theme=gr.themes.Soft(primary_hue="violet", secondary_hue="cyan"), css=CSS,
+        theme=hud.THEME, css=hud.CSS, head=hud.head(settings.timezone),
     )
 
 

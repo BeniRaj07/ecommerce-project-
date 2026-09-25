@@ -149,7 +149,7 @@ def handle_create_reminder(it: IntentResult, text: str, state, now: datetime) ->
     if day is None:  # time without a date: the next time that clock time comes round
         day = local_now.date() if it.time > local_now.time() else local_now.date() + timedelta(days=1)
     try:
-        r = reminders.create_reminder(it.title, day, it.time, recurrence, tz_name)
+        r = reminders.create_reminder(it.title, day, it.time, recurrence, tz_name, now=now)
     except ReminderError as e:
         if "past" in str(e):
             when = fmt_datetime(datetime.combine(day, it.time), lang)
@@ -214,7 +214,7 @@ def handle_update_reminder(it: IntentResult, text: str, state, now: datetime) ->
         if not (it.new_title or new_date or new_time or it.recurrence):
             return _ask(state, it, "What should I change about it?" if lang == "en" else "के परिवर्तन गरूँ?", "new_time")
         r = reminders.update_reminder(r.id, title=it.new_title, local_date=new_date, local_time=new_time,
-                                      recurrence=it.recurrence)
+                                      recurrence=it.recurrence, now=now)
     except ReminderError as e:
         return Reply(f"⚠️ {e}", lang, it.intent)
     return Reply(t("reminder_updated", lang, title=r.title, when=fmt_datetime(r.local_due, lang),
@@ -248,7 +248,7 @@ def handle_create_task(it: IntentResult, text: str, state, now: datetime) -> Rep
         day = it.date or now.date()
         try:
             r = reminders.create_reminder(task.title, day, it.time, "monthly" if recurring else "none",
-                                          settings.timezone, task_id=task.id)
+                                          settings.timezone, task_id=task.id, now=now)
             msg += t("task_reminder_added", lang, when=fmt_datetime(r.local_due, lang))
         except ReminderError as e:
             msg += f" ⚠️ {e}"

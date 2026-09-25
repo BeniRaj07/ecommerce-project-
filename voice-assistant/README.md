@@ -69,7 +69,8 @@ table (completed and translated), `LEAGUE_CODES` (extended with Nepali names), t
 
 ```
 voice-assistant/
-├── app.py                        # Gradio UI (4 tabs) + start-up
+├── app.py                        # Gradio UI (4 tabs inside the HUD) + start-up
+├── hud.py                        # futuristic HUD theme: CSS, live clock script, SVG gauges
 ├── config.py                     # settings from .env, JSON structured logging
 ├── assistant/
 │   ├── intent_classifier.py      # 16 intents, entity extraction, Pydantic validation
@@ -134,7 +135,9 @@ python scripts/check_setup.py
 python app.py
 ```
 
-Open **http://127.0.0.1:7860**. The SQLite database (`data/assistant.db`) and its tables are
+Open **http://127.0.0.1:7860**. The interface is a futuristic HUD: a live calendar dial, a system panel,
+upcoming reminders, an animated core that speeds up while the assistant is thinking or listening,
+weather and monthly-task gauges, and a circular dock that switches between the four tabs. The SQLite database (`data/assistant.db`) and its tables are
 created automatically on first start. Logs are written as JSON lines to `logs/app.log`.
 
 ## 6. Tests
