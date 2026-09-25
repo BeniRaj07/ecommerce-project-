@@ -49,12 +49,11 @@ def _build_session() -> requests.Session:
 _session = _build_session()
 
 
-def get_json(service: str, url: str, *, params: dict | None = None, headers: dict | None = None,
-             timeout: float | None = None) -> Any:
-    """GET a JSON document, translating every failure into a ServiceError."""
+def _request(service: str, method: str, url: str, *, timeout: float | None = None, **kwargs) -> requests.Response:
+    """Send a request and turn every failure into a ServiceError with a user-safe message."""
     started = time.perf_counter()
     try:
-        resp = _session.get(url, params=params, headers=headers, timeout=timeout or settings.http_timeout)
+        resp = _session.request(method, url, timeout=timeout or settings.http_timeout, **kwargs)
     except requests.Timeout as e:
         raise ServiceError(service, "the service took too long to respond") from e
     except requests.ConnectionError as e:
@@ -62,22 +61,41 @@ def get_json(service: str, url: str, *, params: dict | None = None, headers: dic
     except requests.RequestException as e:
         raise ServiceError(service, "the request failed") from e
 
-    log.info("http_request", extra={"service": service, "status": resp.status_code,
+    log.info("http_request", extra={"service": service, "method": method, "status": resp.status_code,
                                      "ms": round((time.perf_counter() - started) * 1000)})
     if resp.status_code == 429:
         raise RateLimitError(service, "rate limit reached — please wait a minute and try again", status=429)
     if resp.status_code in (401, 403):
         raise ServiceError(service, "access denied (invalid API key or this data is not in your plan)",
                            status=resp.status_code)
+    if resp.status_code == 402:
+        raise ServiceError(service, "this feature needs a paid plan or more credits", status=402)
     if resp.status_code == 404:
         raise ServiceError(service, "the requested data was not found", status=404)
     if resp.status_code >= 400:
         raise ServiceError(service, f"the service returned an error (HTTP {resp.status_code})",
                            status=resp.status_code)
+    return resp
+
+
+def get_json(service: str, url: str, *, params: dict | None = None, headers: dict | None = None,
+             timeout: float | None = None) -> Any:
+    """GET a JSON document, translating every failure into a ServiceError."""
+    resp = _request(service, "GET", url, params=params, headers=headers, timeout=timeout)
     try:
         return resp.json()
     except ValueError as e:
         raise ServiceError(service, "the service returned an unreadable response") from e
+
+
+def post_for_bytes(service: str, url: str, *, json_body: dict, params: dict | None = None,
+                   headers: dict | None = None, timeout: float | None = None) -> bytes:
+    """POST JSON and return the raw response body (used for generated audio). Not retried
+    automatically, because every call costs credits."""
+    resp = _request(service, "POST", url, json=json_body, params=params, headers=headers, timeout=timeout)
+    if not resp.content:
+        raise ServiceError(service, "the service returned an empty response")
+    return resp.content
 
 
 class TTLCache:

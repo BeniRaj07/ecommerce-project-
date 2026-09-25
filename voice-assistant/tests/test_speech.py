@@ -77,32 +77,93 @@ def test_clean_for_speech_removes_markdown_and_urls():
     assert "http" not in spoken and "*" not in spoken and "|" not in spoken and "BBC" in spoken
 
 
-def test_nepali_uses_configured_engine_first(monkeypatch, tmp_path):
+def fake_engines(monkeypatch, tmp_path, failing=()):
+    """Replace every engine with a stub that records calls (and optionally fails)."""
     used = []
-    monkeypatch.setitem(tts.ENGINES, "gemini", lambda text, lang: used.append("gemini") or tmp_path / "g.wav")
-    monkeypatch.setitem(tts.ENGINES, "edge", lambda text, lang: used.append("edge") or tmp_path / "e.wav")
-    monkeypatch.setattr(tts, "settings", dataclasses.replace(tts.settings, tts_engine_ne="edge", tts_engine_en="gemini"))
-    tts.synthesize("नमस्ते", "ne")
-    tts.synthesize("Hello", "en")
-    assert used == ["edge", "gemini"]
+    for name in ("elevenlabs", "gemini", "edge"):
+        def engine(text, lang, name=name):
+            used.append(name)
+            if name in failing:
+                raise TTSError(f"{name} down")
+            return tmp_path / f"{name}.wav"
+        monkeypatch.setitem(tts.ENGINES, name, engine)
+    return used
 
 
-def test_fallback_when_primary_engine_fails(monkeypatch, tmp_path):
-    def gemini_down(text, lang):
-        raise TTSError("the Gemini speech quota is exhausted")
-    monkeypatch.setitem(tts.ENGINES, "gemini", gemini_down)
-    monkeypatch.setitem(tts.ENGINES, "edge", lambda text, lang: tmp_path / "backup.wav")
-    monkeypatch.setattr(tts, "settings", dataclasses.replace(tts.settings, tts_engine_en="gemini"))
-    assert tts.synthesize("Hello there", "en") == tmp_path / "backup.wav"
+def test_elevenlabs_is_the_default_engine_for_both_languages(monkeypatch, tmp_path):
+    used = fake_engines(monkeypatch, tmp_path)
+    monkeypatch.setattr(tts, "settings", dataclasses.replace(tts.settings, tts_engine_en="elevenlabs",
+                                                             tts_engine_ne="elevenlabs"))
+    assert tts.synthesize("Hello", "en") == tmp_path / "elevenlabs.wav"
+    assert tts.synthesize("नमस्ते", "ne") == tmp_path / "elevenlabs.wav"
+    assert used == ["elevenlabs", "elevenlabs"]
 
 
-def test_all_engines_failing_raises_tts_error(monkeypatch):
-    def down(text, lang):
-        raise RuntimeError("offline")
-    monkeypatch.setitem(tts.ENGINES, "gemini", down)
-    monkeypatch.setitem(tts.ENGINES, "edge", down)
+def test_fallback_order_depends_on_language(monkeypatch, tmp_path):
+    used = fake_engines(monkeypatch, tmp_path, failing=("elevenlabs",))
+    monkeypatch.setattr(tts, "settings", dataclasses.replace(tts.settings, tts_engine_en="elevenlabs",
+                                                             tts_engine_ne="elevenlabs"))
+    assert tts.synthesize("नमस्ते", "ne") == tmp_path / "edge.wav"      # native Nepali voice next
+    assert tts.synthesize("Hello", "en") == tmp_path / "gemini.wav"
+    assert used == ["elevenlabs", "edge", "elevenlabs", "gemini"]
+
+
+def test_all_engines_failing_raises_tts_error(monkeypatch, tmp_path):
+    fake_engines(monkeypatch, tmp_path, failing=("elevenlabs", "gemini", "edge"))
     with pytest.raises(TTSError, match="voice reply unavailable"):
         tts.synthesize("Hello", "en")
+
+
+# ── ElevenLabs request details ──────────────────────────────────────────────
+
+WAV_BYTES = b"RIFF" + b"\x00" * 40
+
+
+@pytest.fixture
+def eleven(monkeypatch):
+    monkeypatch.setattr(tts, "settings", dataclasses.replace(tts.settings, elevenlabs_api_key="el-key"))
+    sent = {}
+
+    def fake_post(service, url, *, json_body, params=None, headers=None, timeout=None):
+        sent.update(url=url, body=json_body, params=params, headers=headers)
+        return sent.get("reply", WAV_BYTES)
+    monkeypatch.setattr(tts, "post_for_bytes", fake_post)
+    return sent
+
+
+def test_elevenlabs_uses_the_chosen_voice_and_wav_output(eleven):
+    path = tts.elevenlabs_tts("Hello there", "en")
+    assert eleven["url"].endswith("/v1/text-to-speech/FL6uoOl4FRyQjIxYJbjj")
+    assert eleven["params"] == {"output_format": "wav_24000"}
+    assert eleven["headers"]["xi-api-key"] == "el-key"
+    assert eleven["body"]["model_id"] == "eleven_multilingual_v2" and "language_code" not in eleven["body"]
+    assert path.read_bytes() == WAV_BYTES
+
+
+def test_elevenlabs_nepali_uses_v3_with_language_code(eleven):
+    tts.elevenlabs_tts("नमस्ते", "ne")
+    assert eleven["body"]["model_id"] == "eleven_v3" and eleven["body"]["language_code"] == "ne"
+
+
+def test_elevenlabs_errors(eleven, monkeypatch):
+    eleven["reply"] = b"ID3 mp3 data"
+    with pytest.raises(TTSError, match="unexpected format"):
+        tts.elevenlabs_tts("Hello", "en")
+
+    def not_found(*a, **k):
+        from services.http import ServiceError
+        raise ServiceError("ElevenLabs", "the requested data was not found", status=404)
+    monkeypatch.setattr(tts, "post_for_bytes", not_found)
+    with pytest.raises(TTSError, match="Add to my voices"):
+        tts.elevenlabs_tts("Hello", "en")
+
+
+def test_elevenlabs_without_key_falls_back(monkeypatch, tmp_path):
+    monkeypatch.setattr(tts, "settings", dataclasses.replace(tts.settings, elevenlabs_api_key="",
+                                                             tts_engine_en="elevenlabs"))
+    monkeypatch.setitem(tts.ENGINES, "elevenlabs", tts.elevenlabs_tts)
+    monkeypatch.setitem(tts.ENGINES, "gemini", lambda text, lang: tmp_path / "gemini.wav")
+    assert tts.synthesize("Hello", "en") == tmp_path / "gemini.wav"
 
 
 def test_gemini_audio_saved_to_unique_wav(monkeypatch):
@@ -131,3 +192,15 @@ def test_gemini_quota_error_is_not_retried(monkeypatch):
 def test_notification_chime_is_a_valid_wav():
     with wave.open(str(tts.notification_sound())) as wf:
         assert wf.getnframes() > 0
+
+
+def test_post_for_bytes_reports_paid_plan_errors(monkeypatch):
+    from services import http
+    monkeypatch.setattr(http._session, "request",
+                        lambda *a, **k: SimpleNamespace(status_code=402, content=b"", json=lambda: {}))
+    with pytest.raises(http.ServiceError, match="paid plan") as e:
+        http.post_for_bytes("ElevenLabs", "https://api.elevenlabs.io/x", json_body={"text": "hi"})
+    assert e.value.status == 402
+    monkeypatch.setattr(http._session, "request",
+                        lambda *a, **k: SimpleNamespace(status_code=200, content=b"RIFF...", json=lambda: {}))
+    assert http.post_for_bytes("ElevenLabs", "https://x", json_body={}) == b"RIFF..."

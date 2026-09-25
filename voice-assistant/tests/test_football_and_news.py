@@ -120,7 +120,7 @@ def fake_response(status, payload=None, bad_json=False):
 @pytest.mark.parametrize("status,exc,text", [
     (429, RateLimitError, "rate limit"), (403, ServiceError, "access denied"), (500, ServiceError, "HTTP 500")])
 def test_http_errors_become_friendly(monkeypatch, status, exc, text):
-    monkeypatch.setattr(http._session, "get", lambda *a, **k: fake_response(status, {}))
+    monkeypatch.setattr(http._session, "request", lambda *a, **k: fake_response(status, {}))
     with pytest.raises(exc) as e:
         http.get_json("Test", "https://example.com")
     assert text in e.value.user_message
@@ -129,19 +129,19 @@ def test_http_errors_become_friendly(monkeypatch, status, exc, text):
 def test_timeout_and_connection_errors(monkeypatch):
     def timeout(*a, **k):
         raise requests.Timeout()
-    monkeypatch.setattr(http._session, "get", timeout)
+    monkeypatch.setattr(http._session, "request", timeout)
     with pytest.raises(ServiceError, match="too long"):
         http.get_json("Test", "https://example.com")
 
     def offline(*a, **k):
         raise requests.ConnectionError()
-    monkeypatch.setattr(http._session, "get", offline)
+    monkeypatch.setattr(http._session, "request", offline)
     with pytest.raises(ServiceError, match="connect"):
         http.get_json("Test", "https://example.com")
 
 
 def test_unreadable_json(monkeypatch):
-    monkeypatch.setattr(http._session, "get", lambda *a, **k: fake_response(200, bad_json=True))
+    monkeypatch.setattr(http._session, "request", lambda *a, **k: fake_response(200, bad_json=True))
     with pytest.raises(ServiceError, match="unreadable"):
         http.get_json("Test", "https://example.com")
 
@@ -149,10 +149,10 @@ def test_unreadable_json(monkeypatch):
 def test_requests_always_have_a_timeout(monkeypatch):
     seen = {}
 
-    def capture(url, **kw):
+    def capture(method, url, **kw):
         seen.update(kw)
         return fake_response(200, {})
-    monkeypatch.setattr(http._session, "get", capture)
+    monkeypatch.setattr(http._session, "request", capture)
     http.get_json("Test", "https://example.com")
     assert seen["timeout"] > 0
 

@@ -289,37 +289,7 @@ def core_busy(label: str):
 
 def core_idle(state: ConversationState | None = None):
     lang = "नेपाली" if state and state.last_language == "ne" else "English"
-    return hud.core("ONLINE", f"Last language: {lang} · Say नमस्ते or ask me anything")
-
-
-# ── chat ─────────────────────────────────────────────────────────────────────
-
-def chat_send(text: str, chat: list, state: ConversationState):
-    text = (text or "").strip()
-    if not text:
-        yield chat, "", state, gr.skip()
-        return
-    chat = list(chat or []) + [{"role": "user", "content": text}, {"role": "assistant", "content": "⏳ …"}]
-    yield chat, "", state, gr.skip()
-    reply = respond(text, state)
-    save_history("user", text, "chat")
-    save_history("assistant", reply.text, "chat")
-    chat[-1] = {"role": "assistant", "content": reply.text}
-    yield chat, "", state, {"text": reply.spoken, "language": reply.language}
-
-
-def listen_last(last: dict | None):
-    if not last:
-        return None, "_Nothing to read yet — send a message first._"
-    try:
-        return str(synthesize(last["text"], last["language"])), ""
-    except TTSError as e:
-        return None, f"🔇 {e.user_message}"
-
-
-def clear_chat():
-    clear_history()
-    return [], ConversationState(), None, [], None, ""
+    return hud.core("ONLINE", f"Tap the mic and speak · नेपाली or English · last reply in {lang}")
 
 
 # ── voice ────────────────────────────────────────────────────────────────────
@@ -364,30 +334,33 @@ def weather_action(city: str, when: str, lang_label: str, state: ConversationSta
     return run_intent(result, state).text
 
 
+def clear_voice():
+    clear_history("voice")
+    return [], ConversationState(), "", "", None, ""
+
+
 def on_load(month):
-    chat = load_history("chat")
     voice = load_history("voice")
-    state = ConversationState(history=list(chat[-10:]))
-    return (chat, voice, state, *dashboard(month))
+    state = ConversationState(history=list(voice[-10:]))
+    return (voice, state, *dashboard(month))
 
 
 # ── layout ───────────────────────────────────────────────────────────────────
 
-CHAT_EXAMPLES = [
-    "नमस्ते! तपाईंलाई कस्तो छ?",
-    "Remind me to submit my assignment tomorrow at 8 PM",
-    "मलाई हरेक महिनाको १ गते घरभाडा तिर्न सम्झाउनु।",
-    "Show my pending tasks for this month",
-    "Is it raining in Pokhara right now?",
-    "Show the Premier League standings",
-    "प्रिमियर लिगको ताजा समाचार सुनाऊ।",
-]
+VOICE_EXAMPLES = """**Try saying**
+- “नमस्ते! तपाईंलाई कस्तो छ?”
+- “Remind me to submit my assignment tomorrow at 8 PM”
+- “मलाई हरेक महिनाको १ गते घरभाडा तिर्न सम्झाउनु।”
+- “Show my pending tasks for this month”
+- “पोखरामा अहिले पानी परिरहेको छ?”
+- “What are the Premier League standings?”
+- “प्रिमियर लिगको ताजा समाचार सुनाऊ।”
+"""
 
 
 def build_ui() -> gr.Blocks:
     with gr.Blocks(title="Awaaz AI · Bilingual Assistant") as demo:
         state = gr.State(ConversationState())
-        last_reply = gr.State(None)
 
         ruler = gr.HTML(hud.ruler(today()))
         gr.HTML(hud.title_bar(settings.timezone))
@@ -406,28 +379,12 @@ def build_ui() -> gr.Blocks:
             with gr.Column(scale=3, min_width=360):
                 core = gr.HTML(hud.core())
                 with gr.Tabs(elem_classes="hud-tabs") as tabs:
-                    # ── TAB 1: chat ──────────────────────────────────────────────
-                    with gr.Tab("💬 AI Chat", id="chat"):
-                        chatbot = gr.Chatbot(height=460, show_label=False, buttons=["copy"],
-                                             placeholder="Ask in English, नेपाली or Romanized Nepali — e.g. "
-                                                         "<i>mero reminder dekhau</i>")
-                        with gr.Row():
-                            chat_in = gr.Textbox(placeholder="Type your message… (Enter to send)", show_label=False,
-                                                 scale=5, lines=1, max_lines=4, container=False)
-                            send_btn = gr.Button("Send ➤", variant="primary", scale=1, min_width=100)
-                        gr.Examples(CHAT_EXAMPLES, inputs=chat_in, label="Try an example")
-                        with gr.Row():
-                            listen_btn = gr.Button("🔊 Listen to last reply")
-                            clear_btn = gr.Button("🗑️ Clear chat history")
-                        listen_audio = gr.Audio(label="Spoken reply", autoplay=True, interactive=False)
-                        listen_status = gr.Markdown()
-
-                    # ── TAB 2: voice ─────────────────────────────────────────────
-                    with gr.Tab("🎙️ Voice", id="voice"):
+                    # ── TAB 1: voice (the only way to talk to the assistant) ─────
+                    with gr.Tab("🎙️ Voice Assistant", id="voice"):
                         with gr.Row():
                             with gr.Column(scale=1):
                                 mic = gr.Audio(sources=["microphone", "upload"], type="filepath",
-                                               label="Record or upload a question")
+                                               label="Tap to speak (or upload a recording)")
                                 hint = gr.Radio(list(VOICE_HINTS), value="Auto-detect", label="Spoken language",
                                                 info="Choose नेपाली if Nepali speech is transcribed as Hindi.")
                                 auto_send = gr.Checkbox(value=True, label="Send automatically when I stop recording")
@@ -435,9 +392,15 @@ def build_ui() -> gr.Blocks:
                                 voice_status = gr.Markdown()
                             with gr.Column(scale=1):
                                 transcript = gr.Textbox(label="I heard", interactive=False)
-                                answer = gr.Markdown(label="Answer")
                                 voice_audio = gr.Audio(label="Spoken reply", autoplay=True, interactive=False)
-                        voice_hist = gr.Chatbot(height=300, label="Voice interaction history")
+                                answer = gr.Markdown(label="Answer")
+                        with gr.Row():
+                            with gr.Column(scale=2):
+                                gr.Markdown("#### 🗂️ Conversation history")
+                                voice_hist = gr.Chatbot(height=320, show_label=False, buttons=["copy"])
+                            with gr.Column(scale=1):
+                                gr.Markdown(VOICE_EXAMPLES, elem_classes="note")
+                                clear_btn = gr.Button("🗑️ Clear history")
 
                     # ── TAB 3: reminders & tasks ─────────────────────────────────
                     with gr.Tab("⏰ Reminders & Tasks", id="plan"):
@@ -535,8 +498,7 @@ def build_ui() -> gr.Blocks:
         # ── circular dock (switches tabs) ─────────────────────────────────
         with gr.Row(elem_classes="hud-dock"):
             dock = {tid: gr.Button(label, elem_classes="dock-btn") for tid, label in (
-                ("chat", "💬\nCHAT"), ("voice", "🎙️\nVOICE"), ("plan", "⏰\nPLAN"), ("world", "🌐\nWORLD"))}
-            dock_listen = gr.Button("🔊\nLISTEN", elem_classes="dock-btn")
+                ("voice", "🎙️\nVOICE"), ("plan", "⏰\nPLAN"), ("world", "🌐\nWORLD"))}
 
         dash = [rem_table, r_pick, notif_md, progress, pending_table, done_table, overdue_table, t_pick]
         hud_out = [ruler, hud_date, hud_system, hud_upcoming, hud_weather, hud_tasks, hud_log]
@@ -547,12 +509,7 @@ def build_ui() -> gr.Blocks:
                     .then(hud_panels, state, hud_out)
                     .then(core_idle, state, core))
 
-        # chat events
-        chat_io = dict(fn=chat_send, inputs=[chat_in, chatbot, state], outputs=[chatbot, chat_in, state, last_reply])
-        for trigger in (chat_in.submit, send_btn.click):
-            after_turn(trigger(lambda: core_busy("PROCESSING"), outputs=core).then(**chat_io))
-        listen_btn.click(listen_last, last_reply, [listen_audio, listen_status])
-        clear_btn.click(clear_chat, outputs=[chatbot, state, last_reply, voice_hist, listen_audio, listen_status]
+        clear_btn.click(clear_voice, outputs=[voice_hist, state, transcript, answer, voice_audio, voice_status]
                         ).then(core_idle, state, core)
 
         # voice events
@@ -601,10 +558,8 @@ def build_ui() -> gr.Blocks:
         # dock
         for tid, btn in dock.items():
             btn.click(lambda t=tid: gr.Tabs(selected=t), outputs=tabs)
-        dock_listen.click(listen_last, last_reply, [listen_audio, listen_status]).then(
-            lambda: gr.Tabs(selected="chat"), outputs=tabs)
 
-        demo.load(on_load, month_dd, [chatbot, voice_hist, state, *dash]).then(hud_panels, state, hud_out)
+        demo.load(on_load, month_dd, [voice_hist, state, *dash]).then(hud_panels, state, hud_out)
     return demo
 
 

@@ -31,6 +31,7 @@ class Settings:
     groq_api_key: str = field(default_factory=lambda: _env("GROQ_API_KEY"))
     news_api_key: str = field(default_factory=lambda: _env("NEWS_API_KEY"))
     football_data_key: str = field(default_factory=lambda: _env("FOOTBALL_DATA_KEY"))
+    elevenlabs_api_key: str = field(default_factory=lambda: _env("ELEVENLABS_API_KEY"))
 
     # Models
     groq_llm_model: str = field(default_factory=lambda: _env("GROQ_LLM_MODEL", "openai/gpt-oss-20b"))
@@ -38,11 +39,15 @@ class Settings:
     gemini_tts_model: str = field(default_factory=lambda: _env("GEMINI_TTS_MODEL", "gemini-2.5-flash-preview-tts"))
     gemini_voice: str = field(default_factory=lambda: _env("GEMINI_VOICE", "Kore"))
 
-    # Text-to-speech engine per language: "gemini" or "edge".
-    # Nepali defaults to edge-tts (dedicated ne-NP voices); switch to "gemini" once you
-    # have verified Gemini's Nepali quality with scripts/verify_tts.py.
-    tts_engine_en: str = field(default_factory=lambda: _env("TTS_ENGINE_EN", "gemini"))
-    tts_engine_ne: str = field(default_factory=lambda: _env("TTS_ENGINE_NE", "edge"))
+    # Text-to-speech engine tried first per language: "elevenlabs", "gemini" or "edge".
+    # The others are used automatically as fallbacks (see services/text_to_speech.py).
+    tts_engine_en: str = field(default_factory=lambda: _env("TTS_ENGINE_EN", "elevenlabs"))
+    tts_engine_ne: str = field(default_factory=lambda: _env("TTS_ENGINE_NE", "elevenlabs"))
+    # ElevenLabs voice used for every spoken reply (https://elevenlabs.io/voices/FL6uoOl4FRyQjIxYJbjj)
+    elevenlabs_voice_id: str = field(default_factory=lambda: _env("ELEVENLABS_VOICE_ID", "FL6uoOl4FRyQjIxYJbjj"))
+    # multilingual_v2 does not cover Nepali; eleven_v3 has the broadest language support
+    elevenlabs_model_en: str = field(default_factory=lambda: _env("ELEVENLABS_MODEL_EN", "eleven_multilingual_v2"))
+    elevenlabs_model_ne: str = field(default_factory=lambda: _env("ELEVENLABS_MODEL_NE", "eleven_v3"))
     edge_voice_en: str = field(default_factory=lambda: _env("EDGE_VOICE_EN", "en-US-JennyNeural"))
     edge_voice_ne: str = field(default_factory=lambda: _env("EDGE_VOICE_NE", "ne-NP-HemkalaNeural"))
 

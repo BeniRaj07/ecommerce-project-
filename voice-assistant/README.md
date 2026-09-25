@@ -1,7 +1,7 @@
-# Awaaz AI — Bilingual AI Voice and Chat Assistant
+# Awaaz AI — Bilingual AI Voice Assistant
 
 **Everyday task management, weather and football news in Nepali (नेपाली) and English.**
-University data-science project · Python 3.11+ · Gradio · Groq Whisper + LLM · Gemini TTS · SQLite · APScheduler
+University data-science project · Python 3.11+ · Gradio · Groq Whisper + LLM · ElevenLabs TTS · SQLite · APScheduler
 
 The assistant has a deliberately **limited scope**: greetings and small talk, personal reminders,
 monthly tasks, weather, and football (soccer). Everything else is politely refused.
@@ -12,8 +12,7 @@ monthly tasks, weather, and football (soccer). Everything else is politely refus
 
 | Capability | What it does | Data source |
 |---|---|---|
-| 💬 Text chat | English, Devanagari Nepali and Romanized Nepali; replies in the user's language; follow-up questions; persistent history; "listen to reply" button | Groq LLM |
-| 🎙️ Voice | Record **or upload** audio → Whisper → same backend → spoken WAV reply (auto-plays) | Groq Whisper, Gemini TTS / edge-tts |
+| 🎙️ Voice conversation | The only way to talk to the assistant: speak (or upload a recording) in English or Nepali → Whisper → intent → answer shown as text **and** spoken back in the ElevenLabs voice [FL6uoOl4FRyQjIxYJbjj](https://elevenlabs.io/voices/FL6uoOl4FRyQjIxYJbjj) (auto-plays); follow-up questions; persistent history | Groq Whisper + LLM, ElevenLabs (fallbacks: Gemini TTS, edge-tts) |
 | ⏰ Reminders | One-time, daily, weekly, monthly; timezone-aware; edit/complete/cancel/delete; in-app pop-up with optional sound | SQLite + APScheduler |
 | 📝 Monthly tasks | Add/edit/complete/delete, recurring monthly tasks without duplicates, pending/completed/overdue views, progress bar, optional linked reminder | SQLite |
 | 🌤️ Weather | Current conditions (temperature, feels-like, rain, wind) kept separate from forecasts; location's own timezone; remembers the last city | Open-Meteo |
@@ -51,7 +50,7 @@ table (completed and translated), `LEAGUE_CODES` (extended with Nepali names), t
 
 ```
             ┌──────────── Gradio UI (app.py) ─────────────┐
- text ─────►│ 💬 Chat   🎙️ Voice   ⏰ Reminders/Tasks   ⚽🌤️ │◄── gr.Timer polls due reminders
+            │     🎙️ Voice   ⏰ Reminders/Tasks   ⚽🌤️      │◄── gr.Timer polls due reminders
  audio ────►└──────┬──────────┬──────────────────────┬─────┘
                    │   speech_to_text (Whisper)     │ dashboard buttons
                    ▼          ▼                      ▼
@@ -64,7 +63,7 @@ table (completed and translated), `LEAGUE_CODES` (extended with Nepali names), t
                    ▼                          ▼
            response_generator (templates for facts, LLM only for small talk + news summaries)
                    ▼
-           Reply(text, spoken, language) ──► text_to_speech (Gemini / edge-tts) ──► WAV
+           Reply(text, spoken, language) ──► text_to_speech (ElevenLabs → Gemini / edge-tts) ──► WAV
 ```
 
 ```
@@ -74,20 +73,20 @@ voice-assistant/
 ├── config.py                     # settings from .env, JSON structured logging
 ├── assistant/
 │   ├── intent_classifier.py      # 16 intents, entity extraction, Pydantic validation
-│   ├── conversation.py           # shared backend for chat + voice, follow-ups, history
+│   ├── conversation.py           # assistant backend: intents, follow-ups, history
 │   ├── handlers.py               # one function per intent
 │   └── response_generator.py     # bilingual templates, formatters, LLM greeting/news summary
 ├── services/
 │   ├── http.py                   # timeouts, retries, friendly errors, cache, rate limiter
 │   ├── llm.py                    # Groq chat wrapper (JSON mode + retry)
 │   ├── speech_to_text.py         # Groq Whisper
-│   ├── text_to_speech.py         # Gemini TTS + edge-tts fallback, unique WAV files
+│   ├── text_to_speech.py         # ElevenLabs voice + Gemini/edge-tts fallbacks, unique WAV files
 │   ├── weather.py  football.py  news.py
 │   └── reminders.py  tasks.py    # SQLite business logic
 ├── database/db.py  models.py     # schema auto-created on start-up
 ├── scheduler/reminder_scheduler.py
 ├── scripts/check_setup.py        # pre-demo API + TTS check
-├── tests/                        # 97 unit tests, all external services mocked
+├── tests/                        # 102 unit tests, all external services mocked
 └── legacy/original_app.py        # the original script, for comparison
 ```
 
@@ -117,9 +116,14 @@ Fill in `.env`:
 | Key | Where to get it | Free tier notes |
 |---|---|---|
 | `GROQ_API_KEY` | console.groq.com/keys | generous; rate-limited per minute |
-| `GEMINI_API_KEY` | aistudio.google.com/apikey | TTS preview model has a daily quota |
+| `ELEVENLABS_API_KEY` | elevenlabs.io/app/settings/api-keys | free tier has a monthly character quota; add the voice to **My Voices** first (see below) |
+| `GEMINI_API_KEY` | aistudio.google.com/apikey | backup TTS; preview model has a daily quota |
 | `NEWS_API_KEY` | newsapi.org/register | developer plan: localhost only, articles delayed ~24 h |
 | `FOOTBALL_DATA_KEY` | football-data.org/client/register | 10 requests/min, the six supported competitions included; scores may be delayed |
+
+**Using the ElevenLabs voice:** sign in at elevenlabs.io, open
+https://elevenlabs.io/voices/FL6uoOl4FRyQjIxYJbjj and click **Add to my voices** (library voices must be in
+your account before the API can use them). To use a different voice, change `ELEVENLABS_VOICE_ID` in `.env`.
 
 Open-Meteo needs no key. The timezone defaults to `Asia/Kathmandu` (`APP_TIMEZONE` in `.env`).
 
@@ -143,7 +147,7 @@ created automatically on first start. Logs are written as JSON lines to `logs/ap
 ## 6. Tests
 
 ```bash
-pytest -q            # 97 tests, ~2 s, no network or API keys needed
+pytest -q            # 102 tests, ~2 s, no network or API keys needed
 pytest -v tests/test_reminders.py     # a single file
 ```
 
@@ -157,7 +161,7 @@ output, STT empty/short/failed audio, TTS fallback and total failure, follow-up 
 
 ## 7. Example interactions
 
-| You say / type | Assistant |
+| You say | Assistant (shown and spoken) |
 |---|---|
 | **Greeting** — `नमस्ते! तपाईंलाई कस्तो छ?` | नमस्ते! म ठिक छु, धन्यवाद। म रिमाइन्डर, काम, मौसम र फुटबलमा सहयोग गर्न सक्छु। |
 | **Reminder** — `Remind me to call mum` | What time should I remind you about "call mum"? |
@@ -185,16 +189,16 @@ output, STT empty/short/failed audio, TTS fallback and total failure, follow-up 
 2. **Architecture (2 min)** — show the diagram above: speech → text → intent (LLM + Pydantic) →
    deterministic services → templates → speech. Stress "facts never come from the LLM".
 3. **Live demo (5 min)** — keep the browser zoomed to ~125 %:
-   * Chat: `नमस्ते` → `Remind me to submit my assignment` → answer the follow-up `today at <2 minutes from now>`.
+   * Voice tab: say “नमस्ते” → “Remind me to submit my assignment” → answer the follow-up “today at <2 minutes from now>”.
    * Voice tab: ask *"काठमाडौंमा अहिले पानी परिरहेको छ?"*; point out the transcript, the Nepali reply and the audio.
-   * Football tab: Premier League standings; then ask in chat for Premier League news **in Nepali**
+   * Football tab: Premier League standings; then ask by voice for Premier League news **in Nepali**
      and show the sources and the "news ≠ confirmed results" label.
    * Tasks tab: add a recurring monthly task, complete another, show the progress bar and overdue list.
    * By now the reminder pops up with a chime — the scheduler working live.
 4. **Data-science angle (1 min)** — structured JSON logs (`logs/app.log`) can be loaded into pandas to
    analyse intent distribution, language mix, latency per service and error rates:
    `pd.read_json("logs/app.log", lines=True).query("msg == 'intent'").intent.value_counts()`.
-5. **Testing & limitations (1 min)** — run `pytest -q` (97 tests, all APIs mocked); honest limits below.
+5. **Testing & limitations (1 min)** — run `pytest -q` (102 tests, all APIs mocked); honest limits below.
 
 **Before the presentation:** run `python scripts/check_setup.py`, and have a backup screen recording
 in case the venue Wi-Fi blocks the APIs.
@@ -205,8 +209,10 @@ in case the venue Wi-Fi blocks the APIs.
   need an always-on deployed scheduler plus a delivery channel such as e-mail, SMS or push.
 * Whisper sometimes labels Nepali speech as Hindi; choosing **नेपाली** in the Voice tab forces Nepali.
 * Romanized Nepali input is understood, but replies are written in Devanagari (better for TTS).
-* Gemini TTS did not officially list Nepali when this was written, hence the edge-tts fallback;
-  edge-tts uses Microsoft Edge's online read-aloud service (unofficial API; needs internet).
+* Nepali speech uses ElevenLabs `eleven_v3` (`eleven_multilingual_v2` does not include Nepali). If your plan
+  or the model rejects Nepali, the app automatically falls back to edge-tts's native ne-NP voices; edge-tts uses
+  Microsoft Edge's online read-aloud service (unofficial API; needs internet).
+* Every spoken reply uses ElevenLabs credits; long news summaries cost the most.
 * Free tiers: NewsAPI articles are delayed and localhost-only; Football-Data.org scores may be delayed
   and live scores may be unavailable.
 
@@ -216,6 +222,6 @@ in case the venue Wi-Fi blocks the APIs.
   sent as a header, not in the URL.
 * The app listens on `127.0.0.1` only and is designed as a **single-user local** app. If you deploy it
   publicly, set `APP_AUTH=username:password` at minimum, and add a `user_id` column to reminders,
-  tasks and chat history so each user's data stays private.
+  tasks and conversation history so each user's data stays private.
 * All user input is validated before saving/deleting (titles, dates, times, months, IDs); SQL uses
   parameterised queries; the LLM is told to treat messages and news text as data, not instructions.
