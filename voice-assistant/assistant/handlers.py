@@ -319,7 +319,7 @@ def handle_delete_task(it: IntentResult, text: str, state, now: datetime) -> Rep
 
 def handle_daily_briefing(it: IntentResult, text: str, state, now: datetime) -> Reply:
     from assistant.briefing import build_briefing
-    city = state.last_city or settings.hud_city
+    city = state.last_city or settings.default_city
     report, error = None, None
     try:
         report = weather.get_weather_report(city)

@@ -16,19 +16,18 @@ sys.path.insert(0, str(ROOT))
 _TMP = Path(tempfile.mkdtemp(prefix="assistant-tests-"))
 os.environ["AUDIO_DIR"] = str(_TMP / "audio")
 os.environ["LOG_DIR"] = str(_TMP / "logs")
-os.environ["DB_PATH"] = str(_TMP / "unused.db")
+os.environ["DATA_DIR"] = str(_TMP / "unused-data")
 os.environ["APP_TIMEZONE"] = "Asia/Kathmandu"
 
-from database import db  # noqa: E402
+from database import stores  # noqa: E402
 from services import football, news, weather  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
-def temp_db(tmp_path):
-    """A fresh SQLite database for every test."""
-    db.set_db_path(tmp_path / "test.db")
-    db.init_db()
-    yield tmp_path / "test.db"
+def temp_stores(tmp_path):
+    """Fresh, isolated JSON data files (conversations/reminders/tasks/settings) for every test."""
+    stores.set_data_dir(tmp_path / "data")
+    yield tmp_path / "data"
 
 
 @pytest.fixture(autouse=True)

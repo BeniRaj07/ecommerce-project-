@@ -1,641 +1,291 @@
-"""Awaaz AI — Bilingual AI Voice and Chat Assistant (Nepali / English).
+"""Awaaz — a bilingual (नेपाली / English) voice & chat assistant with a ChatGPT-style interface.
+
+Everything (greetings, reminders, monthly tasks, weather, football) is reached through ordinary
+conversation — typed or spoken — in a single chat column with a conversation-history sidebar.
+There are no separate feature tabs, dashboards or forms; see README.md for the architecture.
 
 Run:  python app.py      then open http://127.0.0.1:7860
 """
 from __future__ import annotations
 
-import base64
 import logging
-import time as _time
-import uuid
-from datetime import date, datetime, timedelta
-from pathlib import Path
+from datetime import datetime, timezone
 
 import gradio as gr
-import pandas as pd
 
-import hud
-
-from assistant.briefing import build_briefing
-from assistant.conversation import (ConversationState, clear_history, load_history, respond, run_intent,
-                                    save_history)
-from assistant.intent_classifier import IntentResult
-from assistant.response_generator import fmt_datetime, fmt_month
+import theme
+from assistant.conversation import ConversationState, respond, state_from_conversation, sync_conversation
 from config import settings, setup_logging
-from database.db import init_db
+from database.stores import init_stores
 from scheduler.reminder_scheduler import start_scheduler
-from services import football, reminders, tasks, weather
-from services.http import ServiceError
-from services.reminders import ReminderError
+from services import conversations as convo
+from services import reminders, user_settings
 from services.speech_to_text import STTError, transcribe
-from services.tasks import TaskError
-from services.text_to_speech import TTSError, notification_sound, synthesize
+from services.text_to_speech import TTSError, synthesize
 
 log = logging.getLogger("app")
 
-LANG_CHOICES = {"English": "en", "नेपाली (Nepali)": "ne"}
-VOICE_HINTS = {"Auto-detect": None, "English": "en", "नेपाली (Nepali)": "ne"}
-RECURRENCE_CHOICES = {"One time": "none", "Daily": "daily", "Weekly": "weekly", "Monthly": "monthly"}
-LEAGUE_CHOICES = [(football.league_name(c), c) for c in football.LEAGUES]
-NOT_RUNNING_NOTE = ("ℹ️ Reminders are checked every few seconds **while this app is running** and pop up here. "
-                    "They cannot notify you when the app is closed — that would need an always-on deployed "
-                    "scheduler and a delivery channel such as e-mail. Anything that fell due while the app was "
-                    "closed is shown once when it starts again.")
+REMINDER_POLL_SECONDS = 15
 
 
-# ── small helpers ────────────────────────────────────────────────────────────
+# ── shared turn logic (typed AND voice messages funnel through here) ────────
 
-def today() -> date:
-    return datetime.now(settings.tz).date()
-
-
-def month_choices() -> list[tuple[str, str]]:
-    d = today().replace(day=1)
-    out = []
-    for offset in range(-6, 7):
-        idx = d.month - 1 + offset
-        key = f"{d.year + idx // 12:04d}-{idx % 12 + 1:02d}"
-        out.append((fmt_month(key), key))
-    return out
+def _to_chat_messages(conv) -> list[dict]:
+    return [{"role": m.role, "content": m.content} for m in conv.messages]
 
 
-def parse_date(value: str | None, *, required: bool) -> date | None:
-    value = (value or "").strip()
-    if not value:
-        if required:
-            raise ValueError("Please enter a date (YYYY-MM-DD).")
-        return None
+def _process_turn(user_text: str, chatbot_history: list, conv_id: int | None, state: ConversationState,
+                  autoplay: bool, force_speak: bool, lang_hint: str | None = None):
+    """One full turn: echo the user's message, get a reply, optionally speak it.
+    Yields (chatbot, conv_id, state, textbox, status, audio, conv_list) every time, so this can be
+    used directly as a Gradio generator callback."""
+    if conv_id is None:
+        conv = convo.new_conversation()
+        conv_id = conv.id
+        state = ConversationState()
+
+    chatbot_history = list(chatbot_history or []) + [{"role": "user", "content": user_text}]
+    yield chatbot_history, conv_id, state, "", "Awaaz is thinking…", gr.skip(), convo.list_conversations()
+
+    convo.append_message(conv_id, "user", user_text, lang_hint or state.last_language)
     try:
-        return date.fromisoformat(value)
-    except ValueError as e:
-        raise ValueError(f"'{value}' is not a valid date — use YYYY-MM-DD, e.g. {today().isoformat()}.") from e
+        reply = respond(user_text, state, now=datetime.now(timezone.utc))
+    except Exception:  # noqa: BLE001 - never let a bug take down the whole chat turn
+        log.exception("turn_failed")
+        reply_text, reply_lang, spoken = "⚠️ Something went wrong. Please try again.", state.last_language, None
+    else:
+        reply_text, reply_lang, spoken = reply.text, reply.language, reply.spoken
+    convo.append_message(conv_id, "assistant", reply_text, reply_lang)
+    sync_conversation(conv_id, state)
+
+    chatbot_history = chatbot_history + [{"role": "assistant", "content": reply_text}]
+    audio_path = None
+    if spoken and (force_speak or autoplay):
+        try:
+            audio_path = str(synthesize(spoken, reply_lang))
+        except TTSError as e:
+            log.warning("tts_failed", extra={"error": e.user_message})
+
+    yield chatbot_history, conv_id, state, "", "", audio_path, convo.list_conversations()
 
 
-def parse_time(value: str | None, *, required: bool):
-    value = (value or "").strip()
-    if not value:
-        if required:
-            raise ValueError("Please enter a time (HH:MM, 24-hour).")
-        return None
+def text_turn(text: str, chatbot_history: list, conv_id: int | None, state: ConversationState, autoplay: bool):
+    text = (text or "").strip()
+    if not text:
+        yield chatbot_history, conv_id, state, "", "", gr.skip(), gr.skip()
+        return
+    yield from _process_turn(text, chatbot_history, conv_id, state, autoplay, force_speak=False)
+
+
+def voice_turn(audio_path: str | None, chatbot_history: list, conv_id: int | None, state: ConversationState,
+              autoplay: bool):
+    """Same as text_turn, but the message comes from a recorded clip. Voice questions always get a
+    spoken reply (autoplay only gates typed messages); transcription failures are shown, not spoken."""
+    if not audio_path:
+        yield chatbot_history, conv_id, state, "", "", gr.skip(), gr.skip(), None
+        return
+    yield chatbot_history, conv_id, state, gr.skip(), "🎧 Transcribing…", gr.skip(), gr.skip(), gr.skip()
     try:
-        return datetime.strptime(value, "%H:%M").time()
-    except ValueError as e:
-        raise ValueError(f"'{value}' is not a valid time — use 24-hour HH:MM, e.g. 20:30.") from e
+        tr = transcribe(audio_path)
+    except STTError as e:
+        yield chatbot_history, conv_id, state, gr.skip(), f"⚠️ {e.user_message}", gr.skip(), gr.skip(), None
+        return
+    for out in _process_turn(tr.text, chatbot_history, conv_id, state, autoplay, force_speak=True,
+                             lang_hint=tr.language):
+        yield (*out, gr.skip())
+    yield (*(gr.skip(),) * 7, None)  # clear the hidden upload so the next clip can trigger .upload again
 
 
-def ok(msg: str) -> str:
-    return f"✅ {msg}"
+# ── sidebar actions ──────────────────────────────────────────────────────────
+
+def start_new_chat():
+    return [], None, ConversationState(), ""
 
 
-def err(msg: str) -> str:
-    return f"⚠️ {msg}"
+def open_conversation(conv_id: int):
+    conv = convo.get_conversation(conv_id)
+    if conv is None:
+        return gr.skip(), gr.skip(), gr.skip()
+    return _to_chat_messages(conv), conv.id, state_from_conversation(conv)
 
 
-# ── dashboard data ───────────────────────────────────────────────────────────
-
-def _task_df(items) -> pd.DataFrame:
-    return pd.DataFrame(
-        [[x.id, x.title, x.due_date or "—", "🔁 monthly" if x.recurring else "", x.description or ""] for x in items],
-        columns=["ID", "Task", "Due", "Repeats", "Notes"])
+def begin_rename(conv_id: int):
+    conv = convo.get_conversation(conv_id)
+    title = conv.title if conv else ""
+    return conv_id, gr.update(value=title, visible=True)
 
 
-def dashboard(month: str | None):
-    month = month or tasks.month_key(today())
-    rems = reminders.list_reminders()
-    rem_df = pd.DataFrame(
-        [[r.id, r.title, fmt_datetime(r.local_due), r.recurrence, "🔗 task" if r.task_id else ""] for r in rems],
-        columns=["ID", "Reminder", "Next due", "Repeats", "Linked"])
-    rem_dd = gr.update(choices=[(f"#{r.id} · {r.title} · {fmt_datetime(r.local_due)}", r.id) for r in rems], value=None)
-
-    notes = reminders.recent_notifications(8)
-    notif_md = "\n".join(f"- 🔔 **{n.title}** — due {fmt_datetime(n.due_at.astimezone(settings.tz))}" for n in notes) \
-        or "_No reminders have fired yet._"
-
-    prog = tasks.month_progress(month, today())
-    items = tasks.list_tasks(month)
-    pending = [x for x in items if x.status == "pending"]
-    done = [x for x in items if x.status == "completed"]
-    overdue = tasks.overdue_tasks(today())
-    progress_html = f"""
-    <div class="progress-card">
-      <div class="progress-top"><b>{fmt_month(month)}</b>
-        <span>{prog.completed} of {prog.total} completed · {prog.pending} pending · {prog.overdue} overdue</span></div>
-      <div class="bar"><div style="width:{prog.percent}%"></div></div>
-      <div class="pct">{prog.percent}%</div>
-    </div>"""
-    task_options = {x.id: x for x in items + overdue}
-    task_dd = gr.update(choices=[(f"#{x.id} · {x.title} · {x.status} · {fmt_month(x.month)}", x.id)
-                                 for x in task_options.values()], value=None)
-    return rem_df, rem_dd, notif_md, progress_html, _task_df(pending), _task_df(done), _task_df(overdue), task_dd
+def cancel_rename():
+    return None, gr.update(value="", visible=False)
 
 
-# ── reminder actions ─────────────────────────────────────────────────────────
-
-def add_reminder(title, d, tm, rec_label, month):
-    try:
-        r = reminders.create_reminder(title, parse_date(d, required=True), parse_time(tm, required=True),
-                                      RECURRENCE_CHOICES.get(rec_label, "none"))
-        msg = ok(f"Reminder saved: **{r.title}** — {fmt_datetime(r.local_due)}")
-    except (ValueError, ReminderError) as e:
-        msg = err(str(e))
-    return (msg, *dashboard(month))
+def save_rename(conv_id: int | None, new_title: str):
+    if conv_id is not None and (new_title or "").strip():
+        convo.rename_conversation(conv_id, new_title)
+    return None, gr.update(value="", visible=False), convo.list_conversations()
 
 
-def edit_reminder(rid, new_title, d, tm, rec_label, month):
-    if not rid:
-        return (err("Select a reminder first."), *dashboard(month))
-    try:
-        r = reminders.update_reminder(int(rid), title=(new_title or "").strip() or None,
-                                      local_date=parse_date(d, required=False), local_time=parse_time(tm, required=False),
-                                      recurrence=RECURRENCE_CHOICES.get(rec_label) if rec_label else None)
-        msg = ok(f"Updated: **{r.title}** — {fmt_datetime(r.local_due)}")
-    except (ValueError, ReminderError) as e:
-        msg = err(str(e))
-    return (msg, *dashboard(month))
+def delete_and_maybe_clear(conv_id: int, active_id_val: int | None, chatbot_history: list, state: ConversationState):
+    convo.delete_conversation(conv_id)
+    if conv_id == active_id_val:
+        return [], None, ConversationState(), convo.list_conversations()
+    return chatbot_history, active_id_val, state, convo.list_conversations()
 
 
-def reminder_status(rid, status, month):
-    if not rid:
-        return (err("Select a reminder first."), *dashboard(month))
-    try:
-        if status == "deleted":
-            r = reminders.get_reminder(int(rid))
-            reminders.delete_reminder(int(rid))
-            msg = ok(f"Deleted **{r.title if r else rid}**.")
-        else:
-            r = reminders.set_reminder_status(int(rid), status)
-            msg = ok(f"**{r.title}** marked as {status}.")
-    except ReminderError as e:
-        msg = err(str(e))
-    return (msg, *dashboard(month))
+# ── due-reminder chat notifications ─────────────────────────────────────────
 
-
-# ── task actions ─────────────────────────────────────────────────────────────
-
-def add_task(title, desc, due, recurring, remind_time, month):
-    try:
-        due_date = parse_date(due, required=False)
-        rtime = parse_time(remind_time, required=False)
-        task = tasks.create_task(title, month=month, due_date=due_date, description=desc,
-                                 recurring_monthly=bool(recurring))
-        msg = f"Added **{task.title}** to {fmt_month(task.month)}"
-        if rtime:
-            r = reminders.create_reminder(task.title, due_date or today(), rtime,
-                                          "monthly" if recurring else "none", task_id=task.id)
-            msg += f" with a reminder on {fmt_datetime(r.local_due)}"
-        msg = ok(msg + ".")
-        month = task.month
-    except (ValueError, TaskError, ReminderError) as e:
-        msg = err(str(e))
-    return (msg, gr.update(value=month), *dashboard(month))
-
-
-def task_action(tid, action, new_title, new_due, month):
-    if not tid:
-        return (err("Select a task first."), *dashboard(month))
-    tid = int(tid)
-    try:
-        if action == "complete":
-            x = tasks.complete_task(tid)
-            msg = ok(f"🎉 **{x.title}** completed.")
-        elif action == "reopen":
-            x = tasks.set_task_status(tid, "pending")
-            msg = ok(f"**{x.title}** is pending again.")
-        elif action == "delete":
-            x = tasks.get_task(tid)
-            tasks.delete_task(tid)
-            msg = ok(f"Deleted **{x.title if x else tid}**" + (" and stopped it repeating." if x and x.recurring else "."))
-        else:
-            x = tasks.update_task(tid, title=(new_title or "").strip() or None,
-                                  due_date=parse_date(new_due, required=False))
-            msg = ok(f"Updated **{x.title}**.")
-    except (ValueError, TaskError) as e:
-        msg = err(str(e))
-    return (msg, *dashboard(month))
-
-
-# ── due-reminder polling ─────────────────────────────────────────────────────
-
-_CHIME_B64: str | None = None
-
-
-def _chime_tag() -> str:
-    global _CHIME_B64
-    if _CHIME_B64 is None:
-        _CHIME_B64 = base64.b64encode(notification_sound().read_bytes()).decode()
-    # a fresh id each time so the browser re-plays it
-    return f'<audio id="chime{int(_time.time())}" autoplay src="data:audio/wav;base64,{_CHIME_B64}"></audio>'
-
-
-def poll_notifications(sound_on: bool, month: str):
+def poll_due_reminders(chatbot_history: list, conv_id: int | None, state: ConversationState, autoplay: bool):
     fired = reminders.pop_unseen_notifications()
     if not fired:
-        return (gr.skip(),) * 9
-    banner = hud.alert_banner([(n.title, fmt_datetime(n.due_at.astimezone(settings.tz))) for n in fired],
-                              _chime_tag() if sound_on else "")
-    return (banner, *dashboard(month))
-
-
-# ── HUD side panels ──────────────────────────────────────────────────────────
-
-_weather_cache: dict = {"city": None, "at": 0.0, "report": None, "error": None}
-
-
-def _hud_weather(city: str):
-    """Weather for the dashboard gauge; after a failure, wait 5 minutes before trying again."""
-    c = _weather_cache
-    if c["city"] == city and _time.time() - c["at"] < (300 if c["error"] else 600):
-        return c["report"], c["error"]
-    try:
-        report, error = weather.get_weather_report(city), None
-        if report is None:
-            error = "CITY NOT FOUND"
-    except ServiceError as e:
-        report, error = None, e.user_message.upper()
-    except Exception:  # noqa: BLE001 - a dashboard widget must never break the page
-        log.warning("hud_weather_failed", exc_info=True)
-        report, error = None, "UNAVAILABLE"
-    c.update(city=city, at=_time.time(), report=report, error=error)
-    return report, error
-
-
-def hud_panels(state: ConversationState | None):
-    d = today()
-    rems = reminders.list_reminders()
-    prog = tasks.month_progress(tasks.month_key(d), d)
-    overdue = len(tasks.overdue_tasks(d))
-    fired = reminders.recent_notifications(5)
-    todays = [r for r in rems if r.local_due.date() == d]
-    system = hud.system_panel([
-        ("REMINDERS", min(len(rems) / 10, 1), str(len(rems)), False),
-        ("DUE TODAY", min(len(todays) / 5, 1), str(len(todays)), bool(todays)),
-        ("TASKS DONE", prog.percent / 100, f"{prog.percent}%", False),
-        ("PENDING", prog.pending / prog.total if prog.total else 0, str(prog.pending), False),
-        ("OVERDUE", min(overdue / 5, 1), str(overdue), overdue > 0),
-    ])
-    upcoming = hud.list_panel("UPCOMING", [(r.title, fmt_datetime(r.local_due) + (" · " + r.recurrence if r.recurrence != "none" else ""))
-                                           for r in rems[:5]], "No upcoming reminders")
-    activity = hud.list_panel("ALERT LOG", [(n.title, "fired " + fmt_datetime(n.due_at.astimezone(settings.tz)))
-                                            for n in fired], "No reminders have fired yet")
-    city = (state.last_city if state and state.last_city else settings.hud_city)
-    report, error = _hud_weather(city)
-    task_gauge = hud.gauge("MONTHLY TASKS", str(prog.percent), prog.percent / 100,
-                           [fmt_month(prog.month).upper(), f"{prog.completed}/{prog.total} COMPLETE",
-                            f"{overdue} OVERDUE" if overdue else "ON TRACK"], unit="%")
-    return (hud.ruler(d), hud.date_ring(d), system, upcoming, hud.weather_gauge(report, city, error),
-            task_gauge, activity)
-
-
-def core_busy(label: str):
-    return hud.core(label, "Working on it…", busy=True)
-
-
-def core_idle(state: ConversationState | None = None):
-    lang = "नेपाली" if state and state.last_language == "ne" else "English"
-    return hud.core("ONLINE", f"Hands-free: just speak · नेपाली or English · last reply in {lang}")
-
-
-# ── voice ────────────────────────────────────────────────────────────────────
-
-def speaker_payload(audio_path: str | Path | None) -> str:
-    """Hidden element read by the browser controller (hud.HANDS_FREE_JS): a fresh token each time so
-    the browser knows a new reply arrived, plus the audio as a data URI (empty = no audio, just resume)."""
-    src = ""
-    if audio_path:
-        p = Path(audio_path)
-        mime = "audio/mpeg" if p.suffix == ".mp3" else "audio/wav"
-        src = f"data:{mime};base64,{base64.b64encode(p.read_bytes()).decode()}"
-    return f'<div class="awaaz-say" data-token="{uuid.uuid4().hex}" data-src="{src}"></div>'
-
-
-# Whisper sometimes "hears" these in silence or background noise; ignore them in hands-free mode
-WHISPER_PHANTOMS = {"", "you", "thank you", "thanks for watching", "thank you for watching",
-                    "thank you so much for watching", "bye", "subtitles by the amaraorg community"}
-
-
-def voice_ask(audio_path, hint_label, state: ConversationState, vhist: list, hands_free: bool = False):
-    """One voice turn. Yields (transcript, answer, reply audio, history, status, state, speaker)."""
-    vhist = list(vhist or [])
-    skip = gr.skip()
-    yield skip, skip, skip, vhist, "🎧 Transcribing…", state, skip
-    try:
-        tr = transcribe(audio_path, VOICE_HINTS.get(hint_label))
-    except STTError as e:
-        # hands-free: silence/noise is normal, so just go back to listening quietly
-        status = "" if hands_free else f"⚠️ {e.user_message}"
-        yield skip, skip, skip, vhist, status, state, speaker_payload(None)
-        return
-    normalized = "".join(ch for ch in tr.text.lower() if ch.isalnum() or ch == " ").strip()
-    if hands_free and normalized in WHISPER_PHANTOMS:
-        yield skip, skip, skip, vhist, "", state, speaker_payload(None)
-        return
-    yield tr.text, "", None, vhist, "🤔 Thinking…", state, skip
-    reply = respond(tr.text, state)
-    yield tr.text, reply.text, None, vhist, "🔊 Generating the spoken reply…", state, skip
-    status = ""
-    audio_out = None
-    try:
-        audio_out = str(synthesize(reply.spoken, reply.language))
-    except TTSError as e:
-        status = f"🔇 {e.user_message}. The text reply is shown above."
-    vhist += [{"role": "user", "content": f"🎙️ {tr.text}"}, {"role": "assistant", "content": reply.text}]
-    save_history("user", tr.text, "voice")
-    save_history("assistant", reply.text, "voice")
-    yield tr.text, reply.text, audio_out, vhist, status, state, speaker_payload(audio_out)
-
-
-def hands_free_ask(file_path, hint_label, state: ConversationState, vhist: list):
-    """Same turn, fed by the browser's automatic speech detection; clears the upload afterwards."""
-    for out in voice_ask(file_path, hint_label, state, vhist, hands_free=True):
-        yield (*out, gr.skip())
-    yield (*(gr.skip(),) * 7, None)
-
-
-# ── daily briefing (spoken when the page opens) ─────────────────────────────
-
-_briefing_audio: dict[str, str] = {}   # spoken text -> wav, so reloading the page doesn't spend TTS credits
-
-
-def briefing_on_open(state: ConversationState, vhist: list):
-    lang = "ne" if settings.briefing_language == "ne" else "en"
-    city = settings.hud_city
-    report, error = _hud_weather(city)
-    reply = build_briefing(datetime.now(settings.tz), lang, report, error, city)
-    audio = _briefing_audio.get(reply.spoken)
-    status = ""
-    if not (audio and Path(audio).exists()):
+        return (gr.skip(),) * 5
+    if conv_id is None:
+        conv = convo.new_conversation()
+        conv_id, state = conv.id, ConversationState()
+    lang = state.last_language
+    if lang == "ne":
+        text = "\n".join(f"🔔 सम्झना: **{n.title}** को समय भयो।" for n in fired)
+    else:
+        text = "\n".join(f"🔔 Reminder: **{n.title}** is due now." for n in fired)
+    convo.append_message(conv_id, "assistant", text, lang)
+    chatbot_history = list(chatbot_history or []) + [{"role": "assistant", "content": text}]
+    audio_path = None
+    if autoplay:
         try:
-            audio = str(synthesize(reply.spoken, reply.language))
-            _briefing_audio.clear()
-            _briefing_audio[reply.spoken] = audio
-        except TTSError as e:
-            audio, status = None, f"🔇 {e.user_message}"
-    vhist = list(vhist or []) + [{"role": "assistant", "content": "📋 " + reply.text}]
-    return reply.text, audio, vhist, status, speaker_payload(audio)
+            audio_path = str(synthesize(text, lang))
+        except TTSError:
+            pass
+    return chatbot_history, conv_id, state, audio_path, convo.list_conversations()
 
 
-# ── football & weather tab ───────────────────────────────────────────────────
+# ── settings ─────────────────────────────────────────────────────────────────
 
-def football_action(kind: str, league_code: str, team: str, lang_label: str) -> str:
-    result = IntentResult(intent=kind, league=league_code, team=(team or "").strip() or None,
-                          language=LANG_CHOICES.get(lang_label, "en"))
-    return run_intent(result).text
+def on_autoplay_change(value: bool):
+    user_settings.update_settings(auto_play=bool(value))
 
 
-def weather_action(city: str, when: str, lang_label: str, state: ConversationState) -> str:
-    offset = {"Now": 0, "Tomorrow": 1, "In 2 days": 2}.get(when, 0)
-    result = IntentResult(intent="weather", city=(city or "").strip() or None,
-                          language=LANG_CHOICES.get(lang_label, "en"),
-                          date=today() + timedelta(days=offset) if offset else None,
-                          weather_when="forecast" if offset else "current")
-    return run_intent(result, state).text
-
-
-def clear_voice():
-    clear_history("voice")
-    return [], ConversationState(), "", "", None, "", speaker_payload(None)
-
-
-def on_load(month):
-    voice = load_history("voice")
-    state = ConversationState(history=list(voice[-10:]))
-    return (voice, state, *dashboard(month))
+def stop_audio():
+    return None
 
 
 # ── layout ───────────────────────────────────────────────────────────────────
 
-VOICE_EXAMPLES = """**Try saying**
-- “नमस्ते! तपाईंलाई कस्तो छ?”
-- “Remind me to submit my assignment tomorrow at 8 PM”
-- “मलाई हरेक महिनाको १ गते घरभाडा तिर्न सम्झाउनु।”
-- “Show my pending tasks for this month”
-- “पोखरामा अहिले पानी परिरहेको छ?”
-- “What are the Premier League standings?”
-- “प्रिमियर लिगको ताजा समाचार सुनाऊ।”
-"""
-
-
 def build_ui() -> gr.Blocks:
-    with gr.Blocks(title="Awaaz AI · Bilingual Assistant") as demo:
-        state = gr.State(ConversationState())
+    with gr.Blocks(title="Awaaz") as demo:
+        conv_list = gr.State([])
+        active_id = gr.State(None)
+        convo_state = gr.State(ConversationState())
+        rename_id = gr.State(None)
+        search_q = gr.State("")
 
-        ruler = gr.HTML(hud.ruler(today()))
-        gr.HTML(hud.title_bar(settings.timezone))
-        banner = gr.HTML("")
+        # Created here (not yet placed) so the sidebar's event handlers, defined below, can target
+        # them; `.render()` places each one in the main column further down.
+        chatbot = gr.Chatbot(elem_id="chatbot", show_label=False, buttons=["copy"],
+                             placeholder=theme.welcome_html(), render=False)
+        status_line = gr.Markdown("", elem_id="status-line", render=False)
+        audio_out = gr.Audio(autoplay=True, show_label=False, interactive=False,
+                            elem_classes="audio-container", render=False)
+        stop_audio_btn = gr.Button("⏹ Stop", elem_id="stop-audio-btn", visible=False, size="sm", render=False)
+        text_in = gr.Textbox(placeholder="Message Awaaz…", show_label=False, elem_id="composer-input",
+                             container=False, scale=8, lines=1, max_lines=6, render=False)
+        send_btn = gr.Button("➤", elem_id="send-btn", scale=0, render=False)
+        mic_upload = gr.File(elem_id="mic-upload", file_types=["audio"], render=False)
 
-        with gr.Row(equal_height=False):
-            # ── left HUD column ───────────────────────────────────────────
-            with gr.Column(scale=1, min_width=250):
-                hud_date = gr.HTML(hud.date_ring(today()))
-                hud_system = gr.HTML()
-                hud_upcoming = gr.HTML()
-                sound_cb = gr.Checkbox(value=True, label="🔔 Chime when a reminder is due")
-                dismiss_btn = gr.Button("Dismiss alerts", size="sm")
+        with gr.Row(elem_id="app-root"):
+            # ── sidebar ──────────────────────────────────────────────────
+            with gr.Column(elem_id="sidebar", scale=0, min_width=272):
+                gr.HTML(theme.sidebar_header_html())
+                new_chat_btn = gr.Button("＋ New chat", elem_id="new-chat-btn")
+                search_box = gr.Textbox(placeholder="🔍 Search conversations", show_label=False,
+                                        elem_id="search-box", container=False)
+                with gr.Row(elem_id="rename-bar", visible=False) as rename_row:
+                    rename_box = gr.Textbox(show_label=False, container=False, scale=3)
+                    rename_save = gr.Button("Save", scale=1, size="sm", variant="primary")
+                    rename_cancel = gr.Button("✕", scale=0, size="sm", min_width=32)
 
-            # ── centre: reactor core + the four working tabs ─────────────
-            with gr.Column(scale=3, min_width=360):
-                core = gr.HTML(hud.core())
-                gr.HTML(hud.control_panel())
-                speaker = gr.HTML(speaker_payload(None), elem_id="awaaz-speaker")
-                with gr.Column(elem_id="hf-hidden"):
-                    hf_file = gr.File(elem_id="hf-file", type="filepath", label="hands-free clip")
-                with gr.Tabs(elem_classes="hud-tabs") as tabs:
-                    # ── TAB 1: voice (the only way to talk to the assistant) ─────
-                    with gr.Tab("🎙️ Voice Assistant", id="voice"):
-                        with gr.Row():
-                            with gr.Column(scale=1):
-                                mic = gr.Audio(sources=["microphone", "upload"], type="filepath",
-                                               label="Tap to speak (or upload a recording)")
-                                hint = gr.Radio(list(VOICE_HINTS), value="Auto-detect", label="Spoken language",
-                                                info="Choose नेपाली if Nepali speech is transcribed as Hindi.")
-                                auto_send = gr.Checkbox(value=True, label="Send automatically when I stop recording")
-                                ask_btn = gr.Button("🎤 Ask", variant="primary")
-                                voice_status = gr.Markdown()
-                            with gr.Column(scale=1):
-                                transcript = gr.Textbox(label="I heard", interactive=False)
-                                voice_audio = gr.Audio(label="Spoken reply (tap ▶ to replay)", autoplay=False, interactive=False)
-                                answer = gr.Markdown(label="Answer")
-                        with gr.Row():
-                            with gr.Column(scale=2):
-                                gr.Markdown("#### 🗂️ Conversation history")
-                                voice_hist = gr.Chatbot(height=320, show_label=False, buttons=["copy"])
-                            with gr.Column(scale=1):
-                                gr.Markdown(VOICE_EXAMPLES, elem_classes="note")
-                                clear_btn = gr.Button("🗑️ Clear history")
+                with gr.Column(elem_id="sidebar-scroll"):
+                    @gr.render(inputs=[conv_list, search_q, active_id])
+                    def render_sidebar_list(items, query, active):
+                        filtered = convo.search_conversations(query) if query else items
+                        groups = convo.group_conversations(filtered)
+                        if not groups:
+                            gr.Markdown("_No conversations yet — say hello!_", elem_classes="note")
+                            return
+                        for label, convs in groups.items():
+                            gr.HTML(f'<div class="conv-group-label">{label}</div>')
+                            for c in convs:
+                                row_classes = ["conv-row"] + (["active"] if c.id == active else [])
+                                with gr.Row(elem_classes=row_classes, equal_height=True):
+                                    title_btn = gr.Button(c.title, elem_classes="conv-title-btn", size="sm")
+                                    rename_btn = gr.Button("✏️", elem_classes="conv-icon-btn", size="sm", min_width=26)
+                                    delete_btn = gr.Button("🗑️", elem_classes="conv-icon-btn", size="sm", min_width=26)
+                                    title_btn.click(open_conversation, gr.State(c.id),
+                                                    [chatbot, active_id, convo_state])
+                                    rename_btn.click(begin_rename, gr.State(c.id), [rename_id, rename_box])
+                                    delete_btn.click(delete_and_maybe_clear,
+                                                     [gr.State(c.id), active_id, chatbot, convo_state],
+                                                     [chatbot, active_id, convo_state, conv_list])
 
-                    # ── TAB 3: reminders & tasks ─────────────────────────────────
-                    with gr.Tab("⏰ Reminders & Tasks", id="plan"):
-                        gr.Markdown(NOT_RUNNING_NOTE, elem_classes="note")
-                        with gr.Row():
-                            # reminders
-                            with gr.Column(scale=1):
-                                gr.Markdown(f"### ⏰ Upcoming reminders  \n<span class='note'>Timezone: {settings.timezone}</span>")
-                                rem_table = gr.Dataframe(interactive=False, wrap=True)
-                                with gr.Accordion("➕ Add a reminder", open=False):
-                                    r_title = gr.Textbox(label="What should I remind you about?")
-                                    with gr.Row():
-                                        r_date = gr.Textbox(label="Date (YYYY-MM-DD)", value=lambda: today().isoformat())
-                                        r_time = gr.Textbox(label="Time (HH:MM, 24h)", placeholder="20:00")
-                                    r_rec = gr.Dropdown(list(RECURRENCE_CHOICES), value="One time", label="Repeats")
-                                    r_add = gr.Button("Save reminder", variant="primary")
-                                with gr.Accordion("✏️ Manage a reminder", open=False):
-                                    r_pick = gr.Dropdown(label="Reminder", choices=[])
-                                    with gr.Row():
-                                        r_new_title = gr.Textbox(label="New title (optional)")
-                                        r_new_date = gr.Textbox(label="New date (optional)")
-                                        r_new_time = gr.Textbox(label="New time (optional)")
-                                    r_new_rec = gr.Dropdown([""] + list(RECURRENCE_CHOICES), value="", label="New repeat (optional)")
-                                    with gr.Row():
-                                        r_save = gr.Button("Save changes")
-                                        r_done = gr.Button("✅ Mark done")
-                                        r_cancel = gr.Button("🚫 Cancel")
-                                        r_delete = gr.Button("🗑️ Delete", variant="stop")
-                                rem_status = gr.Markdown()
-                                gr.Markdown("#### 🔔 Recently fired")
-                                notif_md = gr.Markdown()
-                            # tasks
-                            with gr.Column(scale=1):
-                                gr.Markdown("### 📝 Monthly tasks")
-                                month_dd = gr.Dropdown(month_choices(), value=lambda: tasks.month_key(today()), label="Month")
-                                progress = gr.HTML()
-                                with gr.Tabs():
-                                    with gr.Tab("⬜ Pending"):
-                                        pending_table = gr.Dataframe(interactive=False, wrap=True)
-                                    with gr.Tab("✅ Completed"):
-                                        done_table = gr.Dataframe(interactive=False, wrap=True)
-                                    with gr.Tab("⚠️ Overdue (all months)"):
-                                        overdue_table = gr.Dataframe(interactive=False, wrap=True)
-                                with gr.Accordion("➕ Add a task", open=False):
-                                    t_title = gr.Textbox(label="Task")
-                                    t_desc = gr.Textbox(label="Description (optional)")
-                                    with gr.Row():
-                                        t_due = gr.Textbox(label="Due date (optional, YYYY-MM-DD)")
-                                        t_remind = gr.Textbox(label="Also remind me at (optional HH:MM)")
-                                    t_rec = gr.Checkbox(label="🔁 Recurring every month")
-                                    t_add = gr.Button("Add task", variant="primary")
-                                with gr.Accordion("✏️ Manage a task", open=False):
-                                    t_pick = gr.Dropdown(label="Task", choices=[])
-                                    with gr.Row():
-                                        t_new_title = gr.Textbox(label="New title (optional)")
-                                        t_new_due = gr.Textbox(label="New due date (optional)")
-                                    with gr.Row():
-                                        t_complete = gr.Button("✅ Complete")
-                                        t_reopen = gr.Button("↩️ Reopen")
-                                        t_save = gr.Button("Save changes")
-                                        t_delete = gr.Button("🗑️ Delete", variant="stop")
-                                task_status = gr.Markdown()
+                with gr.Row(elem_id="sidebar-footer"):
+                    gr.HTML('<button id="theme-toggle" onclick="awaazToggleTheme()" title="Toggle theme">🌓</button>')
+                    autoplay_cb = gr.Checkbox(value=lambda: user_settings.get_settings().auto_play,
+                                              label="🔊 Auto-play replies", container=False)
 
-                    # ── TAB 4: football & weather ────────────────────────────────
-                    with gr.Tab("⚽ Football & Weather", id="world"):
-                        with gr.Row():
-                            with gr.Column(scale=3):
-                                gr.Markdown("### ⚽ Football (soccer)")
-                                with gr.Row():
-                                    league = gr.Dropdown(LEAGUE_CHOICES, value="PL", label="Competition")
-                                    team = gr.Textbox(label="Team (optional)", placeholder="e.g. Barcelona")
-                                    f_lang = gr.Radio(list(LANG_CHOICES), value="English", label="Language")
-                                with gr.Row():
-                                    news_btn = gr.Button("📰 Latest news")
-                                    table_btn = gr.Button("🏆 Standings")
-                                    results_btn = gr.Button("📊 Recent results")
-                                    fixtures_btn = gr.Button("📅 Upcoming matches")
-                                football_out = gr.Markdown("_Choose a competition and press a button._")
-                            with gr.Column(scale=2):
-                                gr.Markdown("### 🌤️ Weather")
-                                city = gr.Textbox(label="City", value="Kathmandu")
-                                with gr.Row():
-                                    when = gr.Radio(["Now", "Tomorrow", "In 2 days"], value="Now", label="When")
-                                    w_lang = gr.Radio(list(LANG_CHOICES), value="English", label="Language")
-                                weather_btn = gr.Button("Get weather", variant="primary")
-                                weather_out = gr.Markdown()
+            # ── main chat column ────────────────────────────────────────
+            with gr.Column(elem_id="main-col"):
+                gr.HTML(theme.mobile_topbar_html())
+                chatbot.render()
+                status_line.render()
+                gr.HTML(theme.rec_indicator_html())
+                gr.HTML('<div id="mic-status"></div>')
+                with gr.Row(elem_id="audio-row"):
+                    audio_out.render()
+                    stop_audio_btn.render()
+                with gr.Column(elem_id="composer-wrap"):
+                    with gr.Row(elem_id="composer"):
+                        gr.HTML('<button class="mic-btn" onclick="awaazMicTap()" title="Tap to speak">🎤</button>')
+                        text_in.render()
+                        send_btn.render()
+                mic_upload.render()
 
+        # ── events ───────────────────────────────────────────────────────
+        turn_outputs = [chatbot, active_id, convo_state, text_in, status_line, audio_out, conv_list]
+        text_in.submit(text_turn, [text_in, chatbot, active_id, convo_state, autoplay_cb], turn_outputs)
+        send_btn.click(text_turn, [text_in, chatbot, active_id, convo_state, autoplay_cb], turn_outputs)
+        mic_upload.upload(voice_turn, [mic_upload, chatbot, active_id, convo_state, autoplay_cb],
+                          [*turn_outputs, mic_upload])
 
-            # ── right HUD column ──────────────────────────────────────────
-            with gr.Column(scale=1, min_width=250):
-                hud_weather = gr.HTML()
-                hud_tasks = gr.HTML()
-                hud_log = gr.HTML()
+        new_chat_btn.click(start_new_chat, outputs=[chatbot, active_id, convo_state, text_in])
+        search_box.input(lambda q: q, search_box, search_q)
 
-        # ── circular dock (switches tabs) ─────────────────────────────────
-        with gr.Row(elem_classes="hud-dock"):
-            dock = {tid: gr.Button(label, elem_classes="dock-btn") for tid, label in (
-                ("voice", "🎙️\nVOICE"), ("plan", "⏰\nPLAN"), ("world", "🌐\nWORLD"))}
+        rename_save.click(save_rename, [rename_id, rename_box], [rename_id, rename_box, conv_list]
+                          ).then(lambda: gr.update(visible=False), outputs=rename_row)
+        rename_cancel.click(cancel_rename, outputs=[rename_id, rename_box]
+                            ).then(lambda: gr.update(visible=False), outputs=rename_row)
+        rename_id.change(lambda rid: gr.update(visible=rid is not None), rename_id, rename_row)
 
-        dash = [rem_table, r_pick, notif_md, progress, pending_table, done_table, overdue_table, t_pick]
-        hud_out = [ruler, hud_date, hud_system, hud_upcoming, hud_weather, hud_tasks, hud_log]
+        autoplay_cb.change(on_autoplay_change, autoplay_cb)
+        audio_out.change(lambda a: gr.update(visible=a is not None), audio_out, stop_audio_btn)
+        stop_audio_btn.click(stop_audio, outputs=audio_out)
 
-        def after_turn(event):
-            """Refresh the dashboard and HUD, then calm the reactor core down again."""
-            return (event.then(dashboard, month_dd, dash)
-                    .then(hud_panels, state, hud_out)
-                    .then(core_idle, state, core))
+        gr.Timer(REMINDER_POLL_SECONDS).tick(
+            poll_due_reminders, [chatbot, active_id, convo_state, autoplay_cb],
+            [chatbot, active_id, convo_state, audio_out, conv_list])
 
-        clear_btn.click(clear_voice, outputs=[voice_hist, state, transcript, answer, voice_audio, voice_status, speaker]
-                        ).then(core_idle, state, core)
-
-        # voice events
-        voice_out = [transcript, answer, voice_audio, voice_hist, voice_status, state, speaker]
-        voice_io = dict(fn=voice_ask, inputs=[mic, hint, state, voice_hist], outputs=voice_out)
-        after_turn(ask_btn.click(lambda: core_busy("LISTENING"), outputs=core).then(**voice_io))
-
-        def maybe_auto(audio_path, hint_label, st, vh, auto):
-            if not auto:
-                yield "", "", None, vh, "Recording ready — press **Ask** to send.", st, gr.skip()
-                return
-            yield from voice_ask(audio_path, hint_label, st, vh)
-
-        after_turn(mic.stop_recording(lambda auto: core_busy("LISTENING") if auto else gr.skip(), auto_send, core)
-                   .then(maybe_auto, [mic, hint, state, voice_hist, auto_send], voice_out))
-
-        # hands-free: the browser detects speech and uploads each utterance here
-        after_turn(hf_file.upload(hands_free_ask, [hf_file, hint, state, voice_hist], [*voice_out, hf_file]))
-
-        # reminders
-        r_add.click(add_reminder, [r_title, r_date, r_time, r_rec, month_dd], [rem_status, *dash])
-        r_save.click(edit_reminder, [r_pick, r_new_title, r_new_date, r_new_time, r_new_rec, month_dd], [rem_status, *dash])
-        for btn, status in ((r_done, "done"), (r_cancel, "cancelled"), (r_delete, "deleted")):
-            btn.click(lambda rid, m, s=status: reminder_status(rid, s, m), [r_pick, month_dd], [rem_status, *dash])
-
-        # tasks
-        month_dd.change(dashboard, month_dd, dash)
-        t_add.click(add_task, [t_title, t_desc, t_due, t_rec, t_remind, month_dd], [task_status, month_dd, *dash])
-        for btn, action in ((t_complete, "complete"), (t_reopen, "reopen"), (t_delete, "delete"), (t_save, "edit")):
-            btn.click(lambda tid, nt, nd, m, a=action: task_action(tid, a, nt, nd, m),
-                      [t_pick, t_new_title, t_new_due, month_dd], [task_status, *dash])
-
-        # football & weather
-        for btn, kind in ((news_btn, "football_news"), (table_btn, "league_table"),
-                          (results_btn, "league_results"), (fixtures_btn, "football_fixtures")):
-            btn.click(lambda lg, tm, lang, k=kind: football_action(k, lg, tm, lang), [league, team, f_lang], football_out)
-        weather_btn.click(weather_action, [city, when, w_lang, state], weather_out)
-        city.submit(weather_action, [city, when, w_lang, state], weather_out)
-
-        # due reminders: poll every 10 s while the page is open; HUD panels every 30 s
-        gr.Timer(10).tick(poll_notifications, [sound_cb, month_dd], [banner, *dash])
-        gr.Timer(30).tick(hud_panels, state, hud_out)
-        dismiss_btn.click(lambda: "", outputs=banner)
-        for task_btn in (r_add, r_save, r_done, r_cancel, r_delete, t_add, t_complete, t_reopen, t_save, t_delete):
-            task_btn.click(hud_panels, state, hud_out)
-        weather_btn.click(hud_panels, state, hud_out)
-
-        # dock
-        for tid, btn in dock.items():
-            btn.click(lambda t=tid: gr.Tabs(selected=t), outputs=tabs)
-
-        demo.load(on_load, month_dd, [voice_hist, state, *dash]).then(hud_panels, state, hud_out).then(
-            briefing_on_open, [state, voice_hist], [answer, voice_audio, voice_hist, voice_status, speaker])
+        demo.load(lambda: convo.list_conversations(), outputs=conv_list)
     return demo
 
 
 def main() -> None:
     setup_logging()
-    init_db()
+    init_stores()
+    user_settings.seed_from_env()
     start_scheduler()
     log.info("starting", extra={"host": settings.server_host, "port": settings.server_port, "tz": settings.timezone})
     auth = tuple(settings.app_auth.split(":", 1)) if ":" in settings.app_auth else None
+    initial_theme = user_settings.get_settings().theme
     build_ui().queue().launch(
         server_name=settings.server_host, server_port=settings.server_port, auth=auth,
-        theme=hud.THEME, css=hud.CSS, head=hud.head(settings.timezone),
+        theme=theme.THEME, css=theme.CSS, head=theme.head(initial_theme),
     )
 
 

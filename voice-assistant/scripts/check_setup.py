@@ -3,7 +3,7 @@
     python scripts/check_setup.py
 
 Listen to the files in data/tts_check/ to decide which engine sounds best for Nepali, then set
-TTS_ENGINE_NE in .env accordingly (elevenlabs, gemini or edge).
+TTS_ENGINE_NE in .env accordingly (gemini, elevenlabs or edge).
 """
 from __future__ import annotations
 

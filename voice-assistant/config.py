@@ -39,10 +39,12 @@ class Settings:
     gemini_tts_model: str = field(default_factory=lambda: _env("GEMINI_TTS_MODEL", "gemini-2.5-flash-preview-tts"))
     gemini_voice: str = field(default_factory=lambda: _env("GEMINI_VOICE", "Kore"))
 
-    # Text-to-speech engine tried first per language: "elevenlabs", "gemini" or "edge".
+    # Text-to-speech engine tried first per language: "gemini", "elevenlabs" or "edge".
     # The others are used automatically as fallbacks (see services/text_to_speech.py).
-    tts_engine_en: str = field(default_factory=lambda: _env("TTS_ENGINE_EN", "elevenlabs"))
-    tts_engine_ne: str = field(default_factory=lambda: _env("TTS_ENGINE_NE", "elevenlabs"))
+    # With no TTS_ENGINE_* override, Gemini is primary (matches Gemini's kept-and-extended role in
+    # this project) unless an ElevenLabs key is configured, in which case that voice is used first.
+    tts_engine_en: str = field(default_factory=lambda: _env("TTS_ENGINE_EN", ""))
+    tts_engine_ne: str = field(default_factory=lambda: _env("TTS_ENGINE_NE", ""))
     # ElevenLabs voice used for every spoken reply (https://elevenlabs.io/voices/FL6uoOl4FRyQjIxYJbjj)
     elevenlabs_voice_id: str = field(default_factory=lambda: _env("ELEVENLABS_VOICE_ID", "FL6uoOl4FRyQjIxYJbjj"))
     # multilingual_v2 does not cover Nepali; eleven_v3 has the broadest language support
@@ -54,8 +56,8 @@ class Settings:
     # App behaviour
     timezone: str = field(default_factory=lambda: _env("APP_TIMEZONE", "Asia/Kathmandu"))
     briefing_language: str = field(default_factory=lambda: _env("BRIEFING_LANGUAGE", "en"))  # en | ne
-    hud_city: str = field(default_factory=lambda: _env("HUD_CITY", "Kathmandu"))   # weather shown on the dashboard
-    db_path: Path = field(default_factory=lambda: Path(_env("DB_PATH", str(BASE_DIR / "data" / "assistant.db"))))
+    default_city: str = field(default_factory=lambda: _env("DEFAULT_CITY", "Kathmandu"))  # used when no city has been mentioned yet
+    data_dir: Path = field(default_factory=lambda: Path(_env("DATA_DIR", str(BASE_DIR / "data"))))
     audio_dir: Path = field(default_factory=lambda: Path(_env("AUDIO_DIR", str(BASE_DIR / "data" / "audio"))))
     log_dir: Path = field(default_factory=lambda: Path(_env("LOG_DIR", str(BASE_DIR / "logs"))))
     reminder_check_seconds: int = field(default_factory=lambda: int(_env("REMINDER_CHECK_SECONDS", "20")))
@@ -64,6 +66,14 @@ class Settings:
     server_port: int = field(default_factory=lambda: int(_env("SERVER_PORT", "7860")))
     # Optional "username:password" to protect the UI if you ever expose it beyond localhost
     app_auth: str = field(default_factory=lambda: _env("APP_AUTH"))
+
+    def __post_init__(self) -> None:
+        # Resolve the adaptive TTS default described above, now that elevenlabs_api_key is known.
+        auto_default = "elevenlabs" if self.elevenlabs_api_key else "gemini"
+        if not self.tts_engine_en:
+            object.__setattr__(self, "tts_engine_en", auto_default)
+        if not self.tts_engine_ne:
+            object.__setattr__(self, "tts_engine_ne", auto_default)
 
     @property
     def tz(self) -> ZoneInfo:

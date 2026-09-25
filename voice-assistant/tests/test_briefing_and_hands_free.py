@@ -75,7 +75,7 @@ def app_module(monkeypatch):
     import app
     calls = {"respond": 0}
 
-    def fake_respond(text, state):
+    def fake_respond(text, state, now=None):
         calls["respond"] += 1
         from assistant.response_generator import Reply
         return Reply("It is 24°C.", "en", "weather")
@@ -88,35 +88,71 @@ def last(gen):
     return list(gen)[-1]
 
 
-def test_hands_free_ignores_whisper_phantoms(app_module, monkeypatch):
+# voice_turn / text_turn yield (chatbot, conv_id, state, textbox, status, audio, conv_list[, mic_upload])
+CHATBOT, CONV_ID, STATE, STATUS, AUDIO, CONV_LIST = 0, 1, 2, 4, 5, 6
+
+
+def test_voice_turn_with_no_clip_is_a_noop(app_module):
     app, calls = app_module
-    monkeypatch.setattr(app, "transcribe", lambda path, hint=None: Transcription("Thank you.", "en"))
-    out = last(app.voice_ask("clip.webm", "Auto-detect", ConversationState(), [], hands_free=True))
-    assert calls["respond"] == 0
-    assert 'data-src=""' in out[6]            # tells the browser to resume listening, no audio
+    out = last(app.voice_turn(None, [], None, ConversationState(), True))
+    assert calls["respond"] == 0 and out[CONV_ID] is None
 
 
-def test_hands_free_silence_is_quiet_but_manual_shows_error(app_module, monkeypatch):
-    app, _ = app_module
+def test_voice_turn_transcription_failure_shows_the_error(app_module, monkeypatch):
+    app, calls = app_module
 
     def silent(path, hint=None):
         raise STTError("I couldn't hear any speech in that recording — please try again")
     monkeypatch.setattr(app, "transcribe", silent)
-    quiet = last(app.voice_ask("clip.webm", "Auto-detect", ConversationState(), [], hands_free=True))
-    loud = last(app.voice_ask("clip.webm", "Auto-detect", ConversationState(), [], hands_free=False))
-    assert quiet[4] == "" and "couldn't hear" in loud[4]
+    out = last(app.voice_turn("clip.webm", [], None, ConversationState(), True))
+    assert calls["respond"] == 0
+    assert "couldn't hear" in out[STATUS]
+    assert out[CHATBOT] == []  # nothing was echoed into the chat
 
 
-def test_real_question_is_answered_and_speaker_updated(app_module, monkeypatch, tmp_path):
+def test_voice_turn_always_speaks_even_with_autoplay_off(app_module, monkeypatch, tmp_path):
+    """A spoken question always gets a spoken answer; the autoplay setting only gates typed replies."""
     app, calls = app_module
     wav = tmp_path / "r.wav"
     wav.write_bytes(b"RIFF1234")
     monkeypatch.setattr(app, "transcribe", lambda path, hint=None: Transcription("Is it raining?", "en"))
     monkeypatch.setattr(app, "synthesize", lambda text, lang: wav)
-    outs = list(app.hands_free_ask("clip.webm", "Auto-detect", ConversationState(), []))
-    final_turn, reset = outs[-2], outs[-1]
-    assert calls["respond"] == 1 and final_turn[1] == "It is 24°C."
-    assert 'data-src="data:audio/wav;base64,' in final_turn[6]
-    assert reset[-1] is None                   # hidden upload cleared for the next utterance
-    assert app.speaker_payload(None) != app.speaker_payload(None)   # fresh token every time
+    outs = list(app.voice_turn("clip.webm", [], None, ConversationState(), False))  # autoplay OFF
+    assert outs[-1][-1] is None       # the trailing yield clears the hidden upload
+    final = outs[-2]
+    assert calls["respond"] == 1
+    assert final[CHATBOT][-1] == {"role": "assistant", "content": "It is 24°C."}
+    assert final[AUDIO] == str(wav)
+    assert isinstance(final[CONV_ID], int)  # a conversation was created on first message
+    assert [c.title for c in final[CONV_LIST]] == ["Is it raining"]  # trailing "?" stripped by make_title
+
+
+def test_text_turn_speaks_only_when_autoplay_is_on(app_module, monkeypatch, tmp_path):
+    app, calls = app_module
+    wav = tmp_path / "r.wav"
+    wav.write_bytes(b"RIFF1234")
+    synth_calls = []
+    monkeypatch.setattr(app, "synthesize", lambda text, lang: synth_calls.append(1) or wav)
+
+    off = last(app.text_turn("Is it raining?", [], None, ConversationState(), False))
+    assert off[AUDIO] is None and synth_calls == []
+
+    on = last(app.text_turn("Is it raining?", [], None, ConversationState(), True))
+    assert on[AUDIO] == str(wav) and synth_calls == [1]
+    assert calls["respond"] == 2
+
+
+def test_text_turn_ignores_blank_input(app_module):
+    app, calls = app_module
+    out = last(app.text_turn("   ", [], None, ConversationState(), True))
+    assert calls["respond"] == 0 and out[CONV_ID] is None
+
+
+def test_conversation_is_reused_across_a_multi_turn_exchange(app_module):
+    app, _ = app_module
+    first = last(app.text_turn("Is it raining?", [], None, ConversationState(), False))
+    conv_id, state = first[CONV_ID], first[STATE]
+    second = last(app.text_turn("And tomorrow?", first[CHATBOT], conv_id, state, False))
+    assert second[CONV_ID] == conv_id
+    assert len(second[CHATBOT]) == 4  # 2 user + 2 assistant messages, same conversation
 

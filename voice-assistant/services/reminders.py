@@ -1,11 +1,13 @@
-"""Reminder storage and scheduling logic (SQLite).
+"""Reminder storage and scheduling logic, backed by data/reminders.json (see database/json_store.py).
 
 * Times are entered as local wall-clock time in the user's timezone (default Asia/Kathmandu)
   and stored as UTC, together with the timezone name.
 * Recurring reminders keep their wall-clock time: a "monthly on the 31st" reminder fires on the
   last day of shorter months and returns to the 31st afterwards (anchor_day).
-* fire_due_reminders() is idempotent: a UNIQUE(reminder_id, due_at) constraint plus a
-  compare-and-set update guarantee each occurrence is notified exactly once.
+* fire_due_reminders() is idempotent: every occurrence records a NotificationRecord keyed by
+  (reminder_id, due_at) before the reminder is advanced or closed, all inside one locked
+  read-modify-write, so an occurrence can never be notified twice even if the scheduler thread and
+  a chat request race each other.
 """
 from __future__ import annotations
 
@@ -16,8 +18,8 @@ from datetime import date, datetime, time, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 from config import settings
-from database.db import get_connection
-from database.models import Notification, Reminder
+from database import stores
+from database.models import NotificationRecord, Reminder
 
 log = logging.getLogger(__name__)
 RECURRENCES = ("none", "daily", "weekly", "monthly")
@@ -26,14 +28,6 @@ MAX_TITLE = 200
 
 class ReminderError(ValueError):
     """Validation problem that should be shown to the user."""
-
-
-def _utc_iso(dt: datetime) -> str:
-    return dt.astimezone(timezone.utc).isoformat(timespec="seconds")
-
-
-def _now_iso() -> str:
-    return _utc_iso(datetime.now(timezone.utc))
 
 
 def to_local(d: date, t: time, tz_name: str) -> datetime:
@@ -95,42 +89,39 @@ def create_reminder(title: str, local_date: date, local_time: time, recurrence: 
     if recurrence == "none" and local_dt <= now:
         raise ReminderError("that time is already in the past")
     local_dt = _first_future(local_dt, recurrence, anchor, now)
-    stamp = _now_iso()
-    with get_connection() as conn:
-        cur = conn.execute(
-            "INSERT INTO reminders (title, next_due_at, timezone, local_time, recurrence, anchor_day, status, "
-            "task_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, 'active', ?, ?, ?)",
-            (title, _utc_iso(local_dt), tz_name, local_time.strftime("%H:%M"), recurrence, anchor,
-             task_id, stamp, stamp),
-        )
-        reminder_id = cur.lastrowid
-    log.info("reminder_created", extra={"reminder_id": reminder_id, "recurrence": recurrence})
-    saved = get_reminder(reminder_id)
-    if saved is None:  # only confirm to the user once it is really in the database
-        raise ReminderError("the reminder could not be saved")
-    return saved
+    stamp = datetime.now(timezone.utc)
+
+    saved: dict[str, Reminder] = {}
+
+    def mutate(data):
+        rid = data.next_id
+        data.next_id += 1
+        r = Reminder(id=rid, title=title, next_due_at=local_dt, timezone=tz_name,
+                     local_time=local_time.strftime("%H:%M"), recurrence=recurrence, anchor_day=anchor,
+                     status="active", task_id=task_id, created_at=stamp, updated_at=stamp)
+        data.reminders[str(rid)] = r
+        saved["reminder"] = r
+
+    stores.reminders.update(mutate)
+    r = saved["reminder"]
+    log.info("reminder_created", extra={"reminder_id": r.id, "recurrence": recurrence})
+    return r
 
 
 def get_reminder(reminder_id: int) -> Reminder | None:
-    with get_connection() as conn:
-        row = conn.execute("SELECT * FROM reminders WHERE id = ?", (reminder_id,)).fetchone()
-    return Reminder.from_row(row) if row else None
+    return stores.reminders.read().reminders.get(str(reminder_id))
 
 
 def list_reminders(status: str | None = "active", on_local_date: date | None = None,
                    tz_name: str | None = None, limit: int = 100) -> list[Reminder]:
-    query, params = "SELECT * FROM reminders", []
+    items = list(stores.reminders.read().reminders.values())
     if status:
-        query += " WHERE status = ?"
-        params.append(status)
-    query += " ORDER BY next_due_at LIMIT ?"
-    params.append(limit)
-    with get_connection() as conn:
-        items = [Reminder.from_row(r) for r in conn.execute(query, params).fetchall()]
+        items = [r for r in items if r.status == status]
+    items.sort(key=lambda r: r.next_due_at)
     if on_local_date:
         tz = ZoneInfo(tz_name or settings.timezone)
         items = [r for r in items if r.next_due_at.astimezone(tz).date() == on_local_date]
-    return items
+    return items[:limit]
 
 
 def find_reminders(query: str, status: str | None = "active") -> list[Reminder]:
@@ -168,13 +159,14 @@ def update_reminder(reminder_id: int, *, title: str | None = None, local_date: d
     if new_recurrence == "none" and local_dt <= now:
         raise ReminderError("the new time is already in the past")
     local_dt = _first_future(local_dt, new_recurrence, anchor, now)
-    with get_connection() as conn:
-        conn.execute(
-            "UPDATE reminders SET title=?, next_due_at=?, local_time=?, recurrence=?, anchor_day=?, "
-            "status='active', updated_at=? WHERE id=?",
-            (new_title, _utc_iso(local_dt), new_time.strftime("%H:%M"), new_recurrence, anchor, _now_iso(),
-             reminder_id),
-        )
+
+    def mutate(data):
+        r = data.reminders[str(reminder_id)]
+        r.title, r.next_due_at, r.local_time = new_title, local_dt, new_time.strftime("%H:%M")
+        r.recurrence, r.anchor_day, r.status = new_recurrence, anchor, "active"
+        r.updated_at = datetime.now(timezone.utc)
+
+    stores.reminders.update(mutate)
     log.info("reminder_updated", extra={"reminder_id": reminder_id})
     return get_reminder(reminder_id)  # type: ignore[return-value]
 
@@ -182,72 +174,90 @@ def update_reminder(reminder_id: int, *, title: str | None = None, local_date: d
 def set_reminder_status(reminder_id: int, status: str) -> Reminder:
     if status not in ("active", "done", "cancelled"):
         raise ReminderError("status must be active, done or cancelled")
-    with get_connection() as conn:
-        cur = conn.execute("UPDATE reminders SET status=?, updated_at=? WHERE id=?",
-                           (status, _now_iso(), reminder_id))
-    if cur.rowcount == 0:
+    found = {"ok": False}
+
+    def mutate(data):
+        r = data.reminders.get(str(reminder_id))
+        if r is not None:
+            r.status, r.updated_at = status, datetime.now(timezone.utc)
+            found["ok"] = True
+
+    stores.reminders.update(mutate)
+    if not found["ok"]:
         raise ReminderError(f"reminder #{reminder_id} does not exist")
     return get_reminder(reminder_id)  # type: ignore[return-value]
 
 
 def delete_reminder(reminder_id: int) -> bool:
-    with get_connection() as conn:
-        cur = conn.execute("DELETE FROM reminders WHERE id = ?", (reminder_id,))
-    log.info("reminder_deleted", extra={"reminder_id": reminder_id, "deleted": cur.rowcount})
-    return cur.rowcount > 0
+    removed = {"ok": False}
+
+    def mutate(data):
+        removed["ok"] = data.reminders.pop(str(reminder_id), None) is not None
+
+    stores.reminders.update(mutate)
+    log.info("reminder_deleted", extra={"reminder_id": reminder_id, "deleted": removed["ok"]})
+    return removed["ok"]
 
 
 def cancel_task_reminders(task_id: int) -> None:
-    with get_connection() as conn:
-        conn.execute("UPDATE reminders SET status='cancelled', updated_at=? WHERE task_id=? AND status='active'",
-                     (_now_iso(), task_id))
+    def mutate(data):
+        for r in data.reminders.values():
+            if r.task_id == task_id and r.status == "active":
+                r.status, r.updated_at = "cancelled", datetime.now(timezone.utc)
+
+    stores.reminders.update(mutate)
 
 
 # ── scheduling ───────────────────────────────────────────────────────────────
 
-def fire_due_reminders(now: datetime | None = None) -> list[Notification]:
+def fire_due_reminders(now: datetime | None = None) -> list[NotificationRecord]:
     """Record a notification for every reminder that is due, then advance or close it.
-    Safe to call repeatedly or concurrently: each occurrence produces exactly one notification."""
+    Safe to call repeatedly or concurrently: the whole check happens inside one locked
+    read-modify-write, so each occurrence produces exactly one notification."""
     now = now or datetime.now(timezone.utc)
-    now_iso = _utc_iso(now)
-    fired: list[Notification] = []
-    with get_connection() as conn:
-        due = [Reminder.from_row(r) for r in conn.execute(
-            "SELECT * FROM reminders WHERE status='active' AND next_due_at <= ? ORDER BY next_due_at",
-            (now_iso,)).fetchall()]
+    fired: list[NotificationRecord] = []
+
+    def mutate(data):
+        due = sorted((r for r in data.reminders.values() if r.status == "active" and r.next_due_at <= now),
+                    key=lambda r: r.next_due_at)
         for r in due:
-            due_iso = _utc_iso(r.next_due_at)
-            cur = conn.execute(
-                "INSERT OR IGNORE INTO reminder_notifications (reminder_id, title, due_at, fired_at) "
-                "VALUES (?, ?, ?, ?)", (r.id, r.title, due_iso, now_iso))
+            due_at = r.next_due_at
+            # dedupe: skip if this exact occurrence already produced a notification
+            if r.last_notified_due_at is not None and r.last_notified_due_at == due_at:
+                continue
+            nid = data.next_notification_id
+            data.next_notification_id += 1
+            note = NotificationRecord(id=nid, reminder_id=r.id, title=r.title, due_at=due_at, fired_at=now)
+            data.notifications.append(note)
+            fired.append(note)
+            r.last_notified_at, r.last_notified_due_at = now, due_at
             if r.recurrence == "none":
-                conn.execute("UPDATE reminders SET status='done', updated_at=? WHERE id=? AND next_due_at=?",
-                             (now_iso, r.id, due_iso))
+                r.status = "done"
             else:
-                # Skip occurrences missed while the app was closed: notify once, then jump to the future
-                nxt = _first_future(r.local_due, r.recurrence, r.anchor_day, now)
-                conn.execute("UPDATE reminders SET next_due_at=?, updated_at=? WHERE id=? AND next_due_at=?",
-                             (_utc_iso(nxt), now_iso, r.id, due_iso))
-            if cur.rowcount:
-                row = conn.execute("SELECT * FROM reminder_notifications WHERE id = ?", (cur.lastrowid,)).fetchone()
-                fired.append(Notification.from_row(row))
+                # Skip occurrences missed while the app was closed: notify once, jump to the future
+                r.next_due_at = _first_future(r.local_due, r.recurrence, r.anchor_day, now)
+            r.updated_at = now
+
+    stores.reminders.update(mutate)
     for n in fired:
         log.info("reminder_fired", extra={"reminder_id": n.reminder_id, "due_at": n.due_at.isoformat()})
     return fired
 
 
-def pop_unseen_notifications() -> list[Notification]:
+def pop_unseen_notifications() -> list[NotificationRecord]:
     """Notifications not yet shown in the UI; marks them as seen (so each pops up once)."""
-    with get_connection() as conn:
-        rows = conn.execute("SELECT * FROM reminder_notifications WHERE seen = 0 ORDER BY due_at").fetchall()
-        if rows:
-            conn.execute(f"UPDATE reminder_notifications SET seen = 1 WHERE id IN ({','.join('?' * len(rows))})",
-                         [r["id"] for r in rows])
-    return [Notification.from_row(r) for r in rows]
+    unseen: list[NotificationRecord] = []
+
+    def mutate(data):
+        for n in data.notifications:
+            if not n.seen:
+                n.seen = True
+                unseen.append(n)
+
+    stores.reminders.update(mutate)
+    return unseen
 
 
-def recent_notifications(limit: int = 10) -> list[Notification]:
-    with get_connection() as conn:
-        rows = conn.execute("SELECT * FROM reminder_notifications ORDER BY fired_at DESC, id DESC LIMIT ?",
-                            (limit,)).fetchall()
-    return [Notification.from_row(r) for r in rows]
+def recent_notifications(limit: int = 10) -> list[NotificationRecord]:
+    items = sorted(stores.reminders.read().notifications, key=lambda n: n.fired_at, reverse=True)
+    return items[:limit]

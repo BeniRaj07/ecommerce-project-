@@ -1,10 +1,14 @@
-"""The single assistant backend used by BOTH the text chat and the voice assistant.
+"""The single assistant backend used by BOTH typed and voice messages, for every intent.
 
 respond(text, state) -> Reply
     1. classify the message (with conversation context and any pending follow-up question)
     2. merge a follow-up answer into the pending request ("tomorrow at eight")
     3. dispatch to the intent handler
     4. turn any failure into a friendly, bilingual message (never a stack trace)
+
+Persistence (the sidebar's conversation history) lives in services/conversations.py; the two
+functions at the bottom of this file translate between a stored Conversation record and the
+in-memory ConversationState respond() works with, so app.py can round-trip state through disk.
 """
 from __future__ import annotations
 
@@ -16,7 +20,6 @@ from assistant.handlers import HANDLERS
 from assistant.intent_classifier import IntentResult, classify_intent, has_devanagari
 from assistant.response_generator import Reply, t
 from config import MissingAPIKeyError, settings
-from database.db import get_connection
 from services import reminders, tasks
 from services.http import ServiceError
 
@@ -83,7 +86,7 @@ def respond(text: str, state: ConversationState, now: datetime | None = None) ->
 
 def run_intent(result: IntentResult, state: ConversationState | None = None,
                now: datetime | None = None) -> Reply:
-    """Run a handler directly (used by the dashboard buttons) with the same error handling."""
+    """Run a handler directly (bypassing intent classification) with the same error handling."""
     state = state or ConversationState()
     now = (now or datetime.now(timezone.utc)).astimezone(settings.tz)
     lang = result.language
@@ -107,24 +110,18 @@ def _remember(state: ConversationState, text: str, reply: Reply) -> Reply:
     return reply
 
 
-# ── persistent chat history (single local user) ─────────────────────────────
+# ── bridging ConversationState to a persisted Conversation record ───────────
 
-def save_history(role: str, content: str, channel: str = "chat") -> None:
-    with get_connection() as conn:
-        conn.execute("INSERT INTO chat_history (role, content, channel, created_at) VALUES (?, ?, ?, ?)",
-                     (role, content, channel, datetime.now(timezone.utc).isoformat(timespec="seconds")))
-
-
-def load_history(channel: str = "chat", limit: int = 40) -> list[dict]:
-    with get_connection() as conn:
-        rows = conn.execute("SELECT role, content FROM chat_history WHERE channel = ? ORDER BY id DESC LIMIT ?",
-                            (channel, limit)).fetchall()
-    return [{"role": r["role"], "content": r["content"]} for r in reversed(rows)]
+def state_from_conversation(conv) -> ConversationState:
+    """Rebuild the in-memory state respond() needs from a stored Conversation (services.conversations)."""
+    history = [{"role": m.role, "content": m.content} for m in conv.messages[-40:]]
+    return ConversationState(history=history, pending=conv.pending, last_city=conv.last_city,
+                             last_language=conv.language)
 
 
-def clear_history(channel: str | None = None) -> None:
-    with get_connection() as conn:
-        if channel:
-            conn.execute("DELETE FROM chat_history WHERE channel = ?", (channel,))
-        else:
-            conn.execute("DELETE FROM chat_history")
+def sync_conversation(conversation_id: int, state: ConversationState) -> None:
+    """Persist whatever respond() learned (follow-up pending, last city, language) back to disk.
+    Call this after respond(); message text itself is saved separately via
+    services.conversations.append_message() so voice and text turns can record it identically."""
+    from services.conversations import set_context
+    set_context(conversation_id, language=state.last_language, last_city=state.last_city, pending=state.pending)

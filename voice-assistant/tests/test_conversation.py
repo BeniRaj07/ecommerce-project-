@@ -105,12 +105,32 @@ def test_greeting_uses_llm_in_users_language(llm_replies, monkeypatch):
     assert reply.text == "[ne] नमस्ते!" and reply.language == "ne"
 
 
-def test_history_is_kept_and_persisted(llm_replies):
+def test_in_memory_history_is_kept(llm_replies):
     state = ConversationState()
     llm_replies.append({"intent": "out_of_scope"})
     respond("what is 2+2", state, now=NOW)
     assert [m["role"] for m in state.history] == ["user", "assistant"]
-    conversation.save_history("user", "hi", "chat")
-    assert conversation.load_history("chat")[-1]["content"] == "hi"
-    conversation.clear_history()
-    assert conversation.load_history("chat") == []
+
+
+def test_state_round_trips_through_a_persisted_conversation(llm_replies, monkeypatch):
+    """assistant.conversation's bridge to services.conversations: a follow-up question's pending
+    state, last city and language all survive being saved to disk and reloaded (e.g. after
+    switching to another conversation and back, or restarting the app)."""
+    from services import conversations as convo
+    from services import weather
+    from tests.conftest import GEOCODE_KATHMANDU, forecast_payload
+    monkeypatch.setattr(weather, "get_json", lambda service, url, **kw:
+                        GEOCODE_KATHMANDU if "geocoding" in url else forecast_payload())
+
+    conv = convo.new_conversation()
+    state = conversation.state_from_conversation(conv)
+    llm_replies.append({"intent": "weather", "city": "Pokhara"})
+    reply = respond("What's the weather in Pokhara?", state, now=NOW)
+    convo.append_message(conv.id, "user", "What's the weather in Pokhara?", state.last_language)
+    convo.append_message(conv.id, "assistant", reply.text, reply.language)
+    conversation.sync_conversation(conv.id, state)
+
+    reloaded_state = conversation.state_from_conversation(convo.get_conversation(conv.id))
+    assert reloaded_state.last_city == "Pokhara"
+    assert reloaded_state.history == [{"role": "user", "content": "What's the weather in Pokhara?"},
+                                      {"role": "assistant", "content": reply.text}]

@@ -1,8 +1,8 @@
-"""Monthly task manager (SQLite).
+"""Monthly task manager, backed by data/tasks.json (see database/json_store.py).
 
 Tasks belong to a month (YYYY-MM). Recurring monthly tasks are stored once as a *series*;
-ensure_recurring_for_month() materialises one task per month with INSERT OR IGNORE on
-UNIQUE(series_id, month), so viewing a month any number of times never creates duplicates.
+ensure_recurring_for_month() materialises one task per month, skipping any (series_id, month)
+pair that already exists, so viewing a month any number of times never creates duplicates.
 Deleted tasks are soft-deleted (status='deleted') so a recurring instance is not re-created.
 """
 from __future__ import annotations
@@ -15,8 +15,8 @@ from dataclasses import dataclass
 from datetime import date, datetime, timezone
 
 from config import settings
-from database.db import get_connection
-from database.models import Task
+from database import stores
+from database.models import Task, TaskSeries
 
 log = logging.getLogger(__name__)
 MAX_TITLE = 200
@@ -51,10 +51,6 @@ def _clean_title(title: str) -> str:
     return title
 
 
-def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="seconds")
-
-
 def _due_in_month(month: str, day: int | None) -> str | None:
     if not day:
         return None
@@ -63,9 +59,8 @@ def _due_in_month(month: str, day: int | None) -> str | None:
 
 
 def get_task(task_id: int) -> Task | None:
-    with get_connection() as conn:
-        row = conn.execute("SELECT * FROM tasks WHERE id = ? AND status != 'deleted'", (task_id,)).fetchone()
-    return Task.from_row(row) if row else None
+    t = stores.tasks.read().tasks.get(str(task_id))
+    return t if (t and t.status != "deleted") else None
 
 
 def create_task(title: str, *, month: str | None = None, due_date: date | None = None,
@@ -73,43 +68,53 @@ def create_task(title: str, *, month: str | None = None, due_date: date | None =
     title = _clean_title(title)
     month = validate_month(month_key(due_date) if due_date else month)
     description = (description or "").strip() or None
-    with get_connection() as conn:
+    stamp = datetime.now(timezone.utc)
+    saved: dict[str, Task] = {}
+
+    def mutate(data):
+        series_id = None
         if recurring_monthly:
-            cur = conn.execute(
-                "INSERT INTO task_series (title, description, day_of_month, start_month, active, created_at) "
-                "VALUES (?, ?, ?, ?, 1, ?)",
-                (title, description, due_date.day if due_date else None, month, _now_iso()))
-            series_id = cur.lastrowid
-            cur = conn.execute(
-                "INSERT INTO tasks (title, description, month, due_date, status, series_id, created_at) "
-                "VALUES (?, ?, ?, ?, 'pending', ?, ?)",
-                (title, description, month, _due_in_month(month, due_date.day if due_date else None),
-                 series_id, _now_iso()))
-        else:
-            cur = conn.execute(
-                "INSERT INTO tasks (title, description, month, due_date, status, created_at) "
-                "VALUES (?, ?, ?, ?, 'pending', ?)",
-                (title, description, month, due_date.isoformat() if due_date else None, _now_iso()))
-        task_id = cur.lastrowid
-    log.info("task_created", extra={"task_id": task_id, "recurring": recurring_monthly, "month": month})
-    task = get_task(task_id)
-    if task is None:
-        raise TaskError("the task could not be saved")
+            sid = data.next_series_id
+            data.next_series_id += 1
+            data.series[str(sid)] = TaskSeries(id=sid, title=title, description=description,
+                                               day_of_month=due_date.day if due_date else None,
+                                               start_month=month, active=True, created_at=stamp)
+            series_id = sid
+        tid = data.next_id
+        data.next_id += 1
+        task = Task(id=tid, title=title, description=description, month=month,
+                   due_date=_due_in_month(month, due_date.day if due_date else None), status="pending",
+                   recurrence="monthly" if recurring_monthly else "none", series_id=series_id,
+                   created_at=stamp)
+        data.tasks[str(tid)] = task
+        saved["task"] = task
+
+    stores.tasks.update(mutate)
+    task = saved["task"]
+    log.info("task_created", extra={"task_id": task.id, "recurring": recurring_monthly, "month": month})
     return task
 
 
 def ensure_recurring_for_month(month: str) -> int:
     """Create this month's instance of every active recurring series (idempotent)."""
     month = validate_month(month)
-    created = 0
-    with get_connection() as conn:
-        for s in conn.execute("SELECT * FROM task_series WHERE active = 1 AND start_month <= ?", (month,)).fetchall():
-            cur = conn.execute(
-                "INSERT OR IGNORE INTO tasks (title, description, month, due_date, status, series_id, created_at) "
-                "VALUES (?, ?, ?, ?, 'pending', ?, ?)",
-                (s["title"], s["description"], month, _due_in_month(month, s["day_of_month"]), s["id"], _now_iso()))
-            created += cur.rowcount
-    return created
+    created = {"n": 0}
+
+    def mutate(data):
+        existing = {(t.series_id, t.month) for t in data.tasks.values() if t.series_id}
+        for s in data.series.values():
+            if not s.active or s.start_month > month or (s.id, month) in existing:
+                continue
+            tid = data.next_id
+            data.next_id += 1
+            data.tasks[str(tid)] = Task(
+                id=tid, title=s.title, description=s.description, month=month,
+                due_date=_due_in_month(month, s.day_of_month), status="pending", recurrence="monthly",
+                series_id=s.id, created_at=datetime.now(timezone.utc))
+            created["n"] += 1
+
+    stores.tasks.update(mutate)
+    return created["n"]
 
 
 def list_tasks(month: str | None = None, status: str | None = None) -> list[Task]:
@@ -118,22 +123,20 @@ def list_tasks(month: str | None = None, status: str | None = None) -> list[Task
     ensure_recurring_for_month(month)
     if status == "overdue":
         return [t for t in overdue_tasks() if t.month == month]
-    query, params = "SELECT * FROM tasks WHERE month = ? AND status != 'deleted'", [month]
+    items = [t for t in stores.tasks.read().tasks.values() if t.month == month and t.status != "deleted"]
     if status in ("pending", "completed"):
-        query += " AND status = ?"
-        params.append(status)
-    query += " ORDER BY status, COALESCE(due_date, '9999'), id"
-    with get_connection() as conn:
-        return [Task.from_row(r) for r in conn.execute(query, params).fetchall()]
+        items = [t for t in items if t.status == status]
+    items.sort(key=lambda t: (t.status, t.due_date or "9999", t.id))
+    return items
 
 
 def overdue_tasks(today: date | None = None) -> list[Task]:
     today = today or today_local()
     ensure_recurring_for_month(month_key(today))
-    with get_connection() as conn:
-        rows = conn.execute("SELECT * FROM tasks WHERE status = 'pending' AND due_date IS NOT NULL AND due_date < ? "
-                            "ORDER BY due_date", (today.isoformat(),)).fetchall()
-    return [Task.from_row(r) for r in rows]
+    items = [t for t in stores.tasks.read().tasks.values()
+            if t.status == "pending" and t.due_date is not None and t.due_date < today.isoformat()]
+    items.sort(key=lambda t: t.due_date or "")
+    return items
 
 
 @dataclass
@@ -151,11 +154,11 @@ class Progress:
 
 def month_progress(month: str | None = None, today: date | None = None) -> Progress:
     month = validate_month(month)
-    tasks = list_tasks(month)
+    items = list_tasks(month)
     today = today or today_local()
-    done = sum(t.status == "completed" for t in tasks)
-    overdue = sum(t.status == "pending" and t.due_date is not None and t.due_date < today.isoformat() for t in tasks)
-    return Progress(month=month, total=len(tasks), completed=done, pending=len(tasks) - done, overdue=overdue)
+    done = sum(t.status == "completed" for t in items)
+    overdue = sum(t.status == "pending" and t.due_date is not None and t.due_date < today.isoformat() for t in items)
+    return Progress(month=month, total=len(items), completed=done, pending=len(items) - done, overdue=overdue)
 
 
 def find_tasks(query: str, month: str | None = None, status: str | None = "pending") -> list[Task]:
@@ -165,12 +168,10 @@ def find_tasks(query: str, month: str | None = None, status: str | None = "pendi
     if month:
         candidates = list_tasks(month, status)
     else:
-        sql, params = "SELECT * FROM tasks WHERE status != 'deleted'", []
+        candidates = [t for t in stores.tasks.read().tasks.values() if t.status != "deleted"]
         if status in ("pending", "completed"):
-            sql += " AND status = ?"
-            params.append(status)
-        with get_connection() as conn:
-            candidates = [Task.from_row(r) for r in conn.execute(sql + " ORDER BY month DESC, id", params)]
+            candidates = [t for t in candidates if t.status == status]
+        candidates.sort(key=lambda t: (t.month, t.id), reverse=True)
     exact = [t for t in candidates if q in t.title.lower() or t.title.lower() in q]
     if exact:
         return exact
@@ -185,10 +186,17 @@ def find_tasks(query: str, month: str | None = None, status: str | None = "pendi
 def set_task_status(task_id: int, status: str) -> Task:
     if status not in ("pending", "completed"):
         raise TaskError("status must be pending or completed")
-    with get_connection() as conn:
-        cur = conn.execute("UPDATE tasks SET status=?, completed_at=? WHERE id=? AND status != 'deleted'",
-                           (status, _now_iso() if status == "completed" else None, task_id))
-    if cur.rowcount == 0:
+    found = {"ok": False}
+
+    def mutate(data):
+        t = data.tasks.get(str(task_id))
+        if t is not None and t.status != "deleted":
+            t.status = status
+            t.completed_at = datetime.now(timezone.utc) if status == "completed" else None
+            found["ok"] = True
+
+    stores.tasks.update(mutate)
+    if not found["ok"]:
         raise TaskError(f"task #{task_id} does not exist")
     if status == "completed":
         from services.reminders import cancel_task_reminders
@@ -210,9 +218,12 @@ def update_task(task_id: int, *, title: str | None = None, description: str | No
     new_desc = (description.strip() or None) if description is not None else task.description
     new_due = due_date.isoformat() if due_date else task.due_date
     new_month = month_key(due_date) if due_date else task.month
-    with get_connection() as conn:
-        conn.execute("UPDATE tasks SET title=?, description=?, due_date=?, month=? WHERE id=?",
-                     (new_title, new_desc, new_due, new_month, task_id))
+
+    def mutate(data):
+        t = data.tasks[str(task_id)]
+        t.title, t.description, t.due_date, t.month = new_title, new_desc, new_due, new_month
+
+    stores.tasks.update(mutate)
     return get_task(task_id)  # type: ignore[return-value]
 
 
@@ -221,10 +232,13 @@ def delete_task(task_id: int) -> bool:
     task = get_task(task_id)
     if task is None:
         return False
-    with get_connection() as conn:
-        conn.execute("UPDATE tasks SET status='deleted' WHERE id=?", (task_id,))
-        if task.series_id:
-            conn.execute("UPDATE task_series SET active=0 WHERE id=?", (task.series_id,))
+
+    def mutate(data):
+        data.tasks[str(task_id)].status = "deleted"
+        if task.series_id is not None and str(task.series_id) in data.series:
+            data.series[str(task.series_id)].active = False
+
+    stores.tasks.update(mutate)
     from services.reminders import cancel_task_reminders
     cancel_task_reminders(task_id)
     log.info("task_deleted", extra={"task_id": task_id, "recurring": task.recurring})
@@ -236,17 +250,15 @@ def delete_task(task_id: int) -> bool:
 def tasks_due_on(day: date) -> list[Task]:
     """Pending tasks whose due date is `day`."""
     ensure_recurring_for_month(month_key(day))
-    with get_connection() as conn:
-        rows = conn.execute("SELECT * FROM tasks WHERE status = 'pending' AND due_date = ? ORDER BY id",
-                            (day.isoformat(),)).fetchall()
-    return [Task.from_row(r) for r in rows]
+    items = [t for t in stores.tasks.read().tasks.values() if t.status == "pending" and t.due_date == day.isoformat()]
+    items.sort(key=lambda t: t.id)
+    return items
 
 
 def tasks_completed_on(day: date, tz=None) -> list[Task]:
     """Tasks marked completed on `day` (in the user's local timezone)."""
     tz = tz or settings.tz
-    with get_connection() as conn:
-        rows = conn.execute("SELECT * FROM tasks WHERE status = 'completed' AND completed_at IS NOT NULL "
-                            "ORDER BY completed_at").fetchall()
-    return [Task.from_row(r) for r in rows
-            if datetime.fromisoformat(r["completed_at"]).astimezone(tz).date() == day]
+    items = [t for t in stores.tasks.read().tasks.values()
+            if t.status == "completed" and t.completed_at is not None and t.completed_at.astimezone(tz).date() == day]
+    items.sort(key=lambda t: t.completed_at)
+    return items
